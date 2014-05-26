@@ -82,7 +82,15 @@ serialPort.on('open',function() {
         var str = data.toString();
         var lines = str.split("\n");
         lines.forEach(function(line) {
-            //console.log("line = ",line);
+            //console.log("line = -",line,"-");
+            if(line == "" || line == "\n" || line == "  ") {
+                return;
+            }
+            if(line[0] == 'T' && line[1] == ':') {
+                var temp = line.match(/T:(\d+\.\d+)/);
+                console.log("got temp back: ",temp[1]);
+                return;
+            }
             if(line[0] == 'o' && line[1] == 'k') {
                 endMessage(line);
             } else {
@@ -134,12 +142,13 @@ serialPort.on('open',function() {
 //G0 X12  move X axis to 12mm
 //G28 move to Origin
 //M114 Get Current Position
-
+//G4 P200  do nothing for 200 msec
+//M109 S185 set temp to 185 and wait
 
 
 function startServer() {
     var allowed_hosts = '*';
-    
+
     app.get("/status",function(req,res) {
         console.log("got status request");
         res.writeHead(200, {
@@ -148,6 +157,8 @@ function startServer() {
         });
         sendRequest('M105',function(m) {
             console.log("got the temp back",m);
+            var temp = m.match(/T:(\d+\.\d+)/);
+            console.log("match temp = ",temp);
             sendRequest('M114',function(mm) {
                 var pos = mm.toString().replace(/\n/g,'');
                 console.log("Mposition = ",pos);
@@ -155,11 +166,11 @@ function startServer() {
                 console.log("matched ", matches[1],matches[2],matches[3],matches[4]);
                 res.end(JSON.stringify({
                     status:'pretty good',
-                    temp:24.8,
-                    x:matches[1],
-                    y:matches[2],
-                    z:matches[3],
-                    e:matches[4],
+                    temp: parseFloat(temp[1]),
+                    x:    parseFloat(matches[1]),
+                    y:    parseFloat(matches[2]),
+                    z:    parseFloat(matches[3]),
+                    e:    parseFloat(matches[4]),
                 }));
             });
         });
@@ -206,6 +217,20 @@ function startServer() {
         });
         console.log("pos => home");
         sendRequest('G28', function() {
+            res.end(JSON.stringify({status:'ok'}));
+        });
+    });
+
+    app.post("/print",function(req,res){
+        console.log("doing a print");
+        console.log("raising the temp to S30");
+        res.writeHead(200, {
+            'Content-Type':'text/json',
+            'Access-Control-Allow-Origin':allowed_hosts,
+        });
+        sendRequest('M109 S30',function() {
+            //M109 S185 set temp to 185 and wait
+            console.log("reached target temp");
             res.end(JSON.stringify({status:'ok'}));
         });
     });
