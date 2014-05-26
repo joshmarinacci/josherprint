@@ -97,8 +97,30 @@ function slice(inpath, outpath,cb) {
 
 Printer = {
     goHome: function(cb) {
+        console.log("goHome");
         MessageQueue.sendRequest('G28',cb);
-    }
+    },
+    getTemp: function(cb) {
+        console.log("getTemp");
+        MessageQueue.sendRequest('M105',function(m) {
+            var temp = m.match(/T:(\d+\.\d+)/);
+            console.log("got temp: ",temp[1]);
+            cb(temp[1]);
+        });
+    },
+    getPositions: function(cb) {
+        console.log("getPositions");
+        MessageQueue.sendRequest('M114',function(mm) {
+            var pos = mm.toString().replace(/\n/g,'');
+            var matches = pos.match(/X:(\d+\.\d+)Y:(\d+\.\d+)Z:(\d+\.\d+)E:(\d+\.\d+)/);
+            cb({
+                x:    parseFloat(matches[1]),
+                y:    parseFloat(matches[2]),
+                z:    parseFloat(matches[3]),
+                e:    parseFloat(matches[4]),
+            });
+        });
+    },
 }
 
 function startServer() {
@@ -110,19 +132,15 @@ function startServer() {
             'Content-Type':'text/json',
             'Access-Control-Allow-Origin':allowed_hosts,
         });
-        MessageQueue.sendRequest('M105',function(m) {
-            var temp = m.match(/T:(\d+\.\d+)/);
-            MessageQueue.sendRequest('M114',function(mm) {
-                var pos = mm.toString().replace(/\n/g,'');
-                var matches = pos.match(/X:(\d+\.\d+)Y:(\d+\.\d+)Z:(\d+\.\d+)E:(\d+\.\d+)/);
-                console.log("sending status request");
+        Printer.getTemp(function(temp) {
+            Printer.getPositions(function(pos) {
                 res.end(JSON.stringify({
                     status:'pretty good',
-                    temp: parseFloat(temp[1]),
-                    x:    parseFloat(matches[1]),
-                    y:    parseFloat(matches[2]),
-                    z:    parseFloat(matches[3]),
-                    e:    parseFloat(matches[4]),
+                    temp: parseFloat(temp),
+                    x:pos.x,
+                    y:pos.y,
+                    z:pos.z,
+                    e:pos.e,
                 }));
             });
         });
@@ -165,7 +183,6 @@ function startServer() {
             'Content-Type':'text/json',
             'Access-Control-Allow-Origin':allowed_hosts,
         });
-        console.log("pos => home");
         Printer.goHome(function() {
             res.end(JSON.stringify({status:'ok'}));
         });
@@ -173,7 +190,6 @@ function startServer() {
 
     app.post("/print",function(req,res){
         console.log("printing ",STATUS.file);
-        console.log("temp to S30");
         res.writeHead(200, {
             'Content-Type':'text/json',
             'Access-Control-Allow-Origin':allowed_hosts,
@@ -181,7 +197,7 @@ function startServer() {
 
         STATUS.gcodefile = process.cwd()+"/foo.gcode";
         slice(STATUS.file,STATUS.gcodefile,function() {
-            console.log("done with slicing");
+            console.log("done with slicing. raising temp");
             MessageQueue.sendRequest('M109 S195',function() {
                 //set temp to 195C and wait
                 console.log("reached target temp");
