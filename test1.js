@@ -139,6 +139,7 @@ serialPort.on('open',function() {
 
 function startServer() {
     var allowed_hosts = '*';
+    
     app.get("/status",function(req,res) {
         console.log("got status request");
         res.writeHead(200, {
@@ -163,6 +164,7 @@ function startServer() {
             });
         });
     });
+
     app.post("/move",function(req,res) {
         console.log("got move request",req.query);
         res.writeHead(200, {
@@ -195,6 +197,17 @@ function startServer() {
             return;
         }
         res.end(JSON.stringify({status:'failure', message:'you must supply at least z, y, or z'}));
+    });
+
+    app.post("/home",function(req,res) {
+        res.writeHead(200, {
+            'Content-Type':'text/json',
+            'Access-Control-Allow-Origin':allowed_hosts,
+        });
+        console.log("pos => home");
+        sendRequest('G28', function() {
+            res.end(JSON.stringify({status:'ok'}));
+        });
     });
 
     var server = app.listen(3589,function() {
