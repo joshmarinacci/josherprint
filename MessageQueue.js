@@ -25,8 +25,9 @@ exports.MessageQueue = {
         this.checkQueue();
     },
     sendCommands:function(arr) {
+        var self = this;
         arr.forEach(function(cmd) {
-            this.sendRequest(cmd,function(){console.log("done",cmd)});
+            self.sendRequest(cmd,function(){console.log("done",cmd)});
         });
     },
     checkQueue:function() {

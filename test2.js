@@ -37,17 +37,38 @@ start print with foo.gcode file, already on disk
 
 */
 
+// ========= GLOBALS
+var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
+var outpath = 'foo.gcode';
+
+var STATUS = {
+    file:null,
+    state:'standby',
+    gcodefile:null,
+}
+
+
+// imports
 var express = require('express');
 var bodyParser = require('body-parser');
 var formidable = require('formidable');
 var child_process = require('child_process');
 var fs = require('fs');
+
+// ==== configure the webserver
 var app = express();
+//parse post bodies
 app.use(bodyParser());
+//middleware function to set mimetype and cross-domain access
+app.use(function(req, res, next){
+    console.log("request came in");
+    res.writeHead(200, {
+        'Content-Type':'text/json',
+        'Access-Control-Allow-Origin':'*',
+    });
+    next();
+});
 
-
-var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
-var outpath = 'foo.gcode';
 
 /*
 SP.list(function(err,ports){
@@ -56,14 +77,10 @@ SP.list(function(err,ports){
 */
 
 
+//start up the serial port and webserver
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
 MessageQueue.openSerial("/dev/cu.usbmodem12341",startServer);
 
-var STATUS = {
-    file:null,
-    state:'standby',
-    gcodefile:null,
-}
 
 function writeFile() {
     console.log("loading gcode file",STATUS.gcodefile);
@@ -121,17 +138,23 @@ Printer = {
             });
         });
     },
+    move: function(axis, value, cb) {
+        var req = 'G0 '+axis.toUpperCase()+value;
+        console.log("move: ",req);
+        MessageQueue.sendRequest(req, function() { cb(value); });
+    },
+    setTemp:function(temp, cb) {
+        MessageQueue.sendRequest('M109 S'+temp,function() {
+            cb(temp);
+        });
+    }
 }
 
 function startServer() {
     console.log('starting webserver');
-    var allowed_hosts = '*';
+
 
     app.get("/status",function(req,res) {
-        res.writeHead(200, {
-            'Content-Type':'text/json',
-            'Access-Control-Allow-Origin':allowed_hosts,
-        });
         Printer.getTemp(function(temp) {
             Printer.getPositions(function(pos) {
                 res.end(JSON.stringify({
@@ -147,31 +170,21 @@ function startServer() {
     });
 
     app.post("/move",function(req,res) {
-        res.writeHead(200, {
-            'Content-Type':'text/json',
-            'Access-Control-Allow-Origin':allowed_hosts,
-        });
         if(req.param('x')) {
-            var x = parseFloat(req.param('x'));
-            console.log("x =>",x);
-            MessageQueue.sendRequest('G0 X'+x, function() {
-                res.end(JSON.stringify({status:'ok', x:x}));
+            Printer.move('x',parseFloat(req.param('x')), function(val) {
+                res.end(JSON.stringify({status:'ok',x:val}));
             });
             return;
         }
         if(req.param('y')) {
-            var y = parseFloat(req.param('y'));
-            console.log("y =>",y);
-            MessageQueue.sendRequest('G0 Y'+y, function() {
-                res.end(JSON.stringify({status:'ok', y:y}));
+            Printer.move('y',parseFloat(req.param('y')), function(val) {
+                res.end(JSON.stringify({status:'ok',y:val}));
             });
             return;
         }
         if(req.param('z')) {
-            var z = parseFloat(req.param('z'));
-            console.log("z =>",z);
-            MessageQueue.sendRequest('G0 Z'+z, function() {
-                res.end(JSON.stringify({status:'ok', z:z}));
+            Printer.move('z',parseFloat(req.param('z')), function(val) {
+                res.end(JSON.stringify({status:'ok',z:val}));
             });
             return;
         }
@@ -179,10 +192,6 @@ function startServer() {
     });
 
     app.post("/home",function(req,res) {
-        res.writeHead(200, {
-            'Content-Type':'text/json',
-            'Access-Control-Allow-Origin':allowed_hosts,
-        });
         Printer.goHome(function() {
             res.end(JSON.stringify({status:'ok'}));
         });
@@ -190,22 +199,14 @@ function startServer() {
 
     app.post("/print",function(req,res){
         console.log("printing ",STATUS.file);
-        res.writeHead(200, {
-            'Content-Type':'text/json',
-            'Access-Control-Allow-Origin':allowed_hosts,
-        });
-
         STATUS.gcodefile = process.cwd()+"/foo.gcode";
         slice(STATUS.file,STATUS.gcodefile,function() {
-            console.log("done with slicing. raising temp");
-            MessageQueue.sendRequest('M109 S195',function() {
-                //set temp to 195C and wait
-                console.log("reached target temp");
-                res.end(JSON.stringify({status:'ok'}));
-
-                MessageQueue.sendRequest("G28", function(r) {
-                    console.log("home finished",r);
+            console.log("done with slicing");
+            Printer.setTemp(195, function(temp) {
+                console.log("reached target temp",temp);
+                Printer.goHome(function() {
                     console.log('starting to print');
+                    res.end(JSON.stringify({status:'ok'}));
                     writeFile();
                 });
             });
@@ -219,10 +220,6 @@ function startServer() {
             STATUS.file = process.cwd()+"/toslice.stl";
             fs.renameSync(file.path,STATUS.file);
             console.log("new file = ",STATUS.file);
-            res.writeHead(200, {
-                'Content-Type':'text/json',
-                'Access-Control-Allow-Origin':allowed_hosts,
-            });
             res.end(JSON.stringify({
                 status:'ok',
                 path: STATUS.file,
