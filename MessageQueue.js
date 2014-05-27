@@ -30,6 +30,18 @@ exports.MessageQueue = {
             self.sendRequest(cmd,function(){console.log("done",cmd)});
         });
     },
+
+    linecount:1,
+
+    appendChecksum: function(cmd) {
+        var cs = 0;
+        for(var i=0; i<cmd.length; i++) {
+            cs = cs ^ cmd[i].charCodeAt(0);
+        }
+        cs &= 0xff;
+        return cmd+'*'+cs;
+    },
+
     checkQueue:function() {
         if(this.queueWaiting) {
             console.log("waiting for the queue");
@@ -37,8 +49,10 @@ exports.MessageQueue = {
             if(this.cbqueue.length > 0) {
                 var command = this.cbqueue[0];
                 //console.log("going to send",command.cmd);
+                var cm = this.appendChecksum("N"+this.linecount+" "+command.cmd);
+                this.linecount++;
                 this.queueWaiting = true;
-                this.serialPort.write(command.cmd+'\n',function(err,results) {
+                this.serialPort.write(cm+'\n',function(err,results) {
                     //console.log("wrote ",results,'bytes');
                 });
             }

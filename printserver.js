@@ -61,7 +61,6 @@ var app = express();
 app.use(bodyParser());
 //middleware function to set mimetype and cross-domain access
 app.use(function(req, res, next){
-    console.log("request came in");
     res.writeHead(200, {
         'Content-Type':'text/json',
         'Access-Control-Allow-Origin':'*',
@@ -80,7 +79,12 @@ SP.list(function(err,ports){
 //start up the serial port and webserver
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
 startServer(function() {
-    MessageQueue.openSerial("/dev/cu.usbmodem12341");
+    MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
+        console.log('sending a request');
+        MessageQueue.sendRequest('M110',function(m) {
+            console.log("m = ",m);
+        });
+    });
 });
 
 
