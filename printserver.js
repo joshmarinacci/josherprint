@@ -54,6 +54,7 @@ var bodyParser = require('body-parser');
 var formidable = require('formidable');
 var child_process = require('child_process');
 var fs = require('fs');
+var websocket = require('nodejs-websocket');
 
 // ==== configure the webserver
 var app = express();
@@ -75,9 +76,29 @@ SP.list(function(err,ports){
 });
 */
 
+var wslisteners = [];
+// ==== set up websocket for realtime monitoring
+var ws = websocket.createServer(function(conn) {
+    conn.on("close",function(code,reason) {
+        console.log("websocket client disconnected",code,reason);
+    });
+    conn.on("error",function(err) {
+        console.log("websocket client error",err);
+    });
+    wslisteners.push(conn);
+}).listen(4202);
+console.log("started websocket client on port ",4202);
 
 //start up the serial port and webserver
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
+
+MessageQueue.broadcast = function(mess) {
+    wslisteners.forEach(function(conn) {
+        if(!conn.readyState) return;
+        conn.sendText(JSON.stringify(mess));
+    })
+}
+
 startServer(function() {
     MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
         console.log('sending a request');
@@ -126,22 +147,38 @@ Printer = {
     getTemp: function(cb) {
         console.log("getTemp");
         MessageQueue.sendRequest('M105',function(m) {
+            console.log("getting temp return ",m);
             var temp = m.match(/T:(\d+\.\d+)/);
-            console.log("got temp: ",temp[1]);
-            cb(temp[1]);
+            if(temp) {
+                console.log("got temp: ",temp[1]);
+                cb(temp[1]);
+            }  else {
+                console.log("getting temp failed for some reason");
+                cb(-1);
+            }
         });
     },
     getPositions: function(cb) {
         console.log("getPositions");
         MessageQueue.sendRequest('M114',function(mm) {
+            console.log("get positiosn returned",mm);
             var pos = mm.toString().replace(/\n/g,'');
             var matches = pos.match(/X:(\d+\.\d+)Y:(\d+\.\d+)Z:(\d+\.\d+)E:(\d+\.\d+)/);
-            cb({
-                x:    parseFloat(matches[1]),
-                y:    parseFloat(matches[2]),
-                z:    parseFloat(matches[3]),
-                e:    parseFloat(matches[4]),
-            });
+            if(!matches) {
+                cb({
+                    x:-1,
+                    y:-1,
+                    z:-1,
+                    e:-1,
+                });
+            } else {
+                cb({
+                    x:    parseFloat(matches[1]),
+                    y:    parseFloat(matches[2]),
+                    z:    parseFloat(matches[3]),
+                    e:    parseFloat(matches[4]),
+                });
+            }
         });
     },
     move: function(axis, value, cb) {
@@ -199,6 +236,14 @@ function startServer(cb) {
 
     app.post("/home",function(req,res) {
         Printer.goHome(function() {
+            res.end(JSON.stringify({status:'ok'}));
+        });
+    });
+
+    app.post("/temp",function(req,res) {
+        console.log("temp = ",req.param('temp'));
+        Printer.setTemp(parseFloat(req.param('temp')), function(temp) {
+            console.log("reached target temp",temp);
             res.end(JSON.stringify({status:'ok'}));
         });
     });

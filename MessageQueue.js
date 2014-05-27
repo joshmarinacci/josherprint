@@ -79,6 +79,10 @@ exports.MessageQueue = {
                     if(line[0] == 'T' && line[1] == ':') {
                         var temp = line.match(/T:(\d+\.\d+)/);
                         console.log("temp: ",temp[1]);
+                        self.broadcast({
+                            type:"temp",
+                            value:temp[1],
+                        });
                         return;
                     }
                     if(line[0] == 'o' && line[1] == 'k') {

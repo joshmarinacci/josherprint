@@ -99,6 +99,16 @@
 
 <div class='container-fluid'>
 
+    <div class='row'>
+        <div class='col-md-4'>
+            <div class='panel panel-default'>
+                <p>current temp: <b id='sidebar-status-temp'>-99C</b></p>
+                <p>state: <b id='sidebar-status-state'>standby</b></p>
+            </div>
+        </div>
+
+
+        <div class='col-md-8'>
 
 <div class='row mode-panel' id='standby-panel'>
     <div class='col-md-12'>
@@ -188,9 +198,6 @@
     </div>
 </div>
 
-
-
-
 <div class='row mode-panel' id='about-panel'>
     <div class='col-md-12'>
         <div class='panel panel-default'>
@@ -206,7 +213,6 @@
         </div>
     </div>
 </div>
-
 
 <div class='row mode-panel' id='settings-panel'>
     <div class='col-md-12'>
@@ -272,13 +278,12 @@
     </div>
 </div>
 
-
 <div class='row mode-panel' id='manual-panel'>
     <div class='col-md-12'>
         <div class='panel panel-default'>
             <div class='panel-heading'>Manual Control</div>
             <div class='panel-body'>
-                <div class='col-xs-4'>
+                <div class='col-xs-6'>
                     <div class='row'>
                         <div class='col-xs-4 col-xs-offset-4'>
                             <button class='btn btn-default' id='manual-up'><span class='glyphicon glyphicon-arrow-up'></span></button>
@@ -286,7 +291,7 @@
                     </div>
                     <div class='row'>
                         <div class='col-xs-4'><button class='btn btn-default' id='manual-left'><span class='glyphicon glyphicon-arrow-left'></span></button></div>
-                        <div class='col-xs-4'>x/y axis</div>
+                        <div class='col-xs-4'><b>X and Y axis</b></div>
                         <div class='col-xs-4'><button class='btn btn-default' id='manual-right'><span class='glyphicon glyphicon-arrow-right'></span></button></div>
                     </div>
                     <div class='row'>
@@ -294,11 +299,9 @@
                             <button class='btn btn-default' id='manual-down'><span class='glyphicon glyphicon-arrow-down'></span></button>
                         </div>
                     </div>
-                </div>
 
-                <div class='col-xs-4'>
                     <div class='row'>
-                        <div class='col-xs-12'>z axis</div>
+                        <div class='col-xs-12'><b>Z axis</b></div>
                     </div>
                     <div class='row'>
                         <div class='col-xs-12'>
@@ -306,14 +309,38 @@
                             <button class='btn btn-default' id='manual-downz'><span class='glyphicon glyphicon-arrow-down'></span></button>
                         </div>
                     </div>
+
+                    <div class='row'>
+                        <div class='col-xs-12'><b>Extruder Temperature</b></div>
+                    </div>
+                    <div class='row'>
+                        <div class='col-xs-12'>
+                            <select id='manual-temp' class='form-control'>
+                                <option value='30'>30 C</option>
+                                <option value='190'>190 C</option>
+                                <option value='195'>195 C</option>
+                                <option value='200'>200 C</option>
+                                <option value='205'>205 C</option>
+                                <option value='210'>210 C</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class='row'>
+                        <div class='col-xs-12'><b>Home</b></div>
+                    </div>
                     <div class='row'>
                         <div class='col-xs-12'>
                             <button class='btn btn-success' id='manual-home'>home</button>
                         </div>
                     </div>
+
+
+
                 </div>
 
-                <div class='col-xs-2'>
+
+                <div class='col-xs-6'>
                     <p>estimates</p>
                     <dl class='dl-horizontal'>
                         <dt>x</dt><dd id='manual-status-x'>100mm</dd>
@@ -327,7 +354,6 @@
     </div>
 </div>
 
-
 <div class='row mode-panel' id='camera-panel'>
     <div class='col-md-12'>
         <div class='panel panel-default'>
@@ -338,6 +364,9 @@
         </div>
     </div>
 </div>
+
+        </div>
+    </div>
 
 </div>
 
@@ -355,6 +384,7 @@ function startPrint() {
     $("#printing-panel").show();
 }
 function startHeat() {
+    $("#sidebar-status-state").text("Heating");
     $(".mode-panel").hide();
     $("#heating-panel").show();
     $("#heating-progress").css('width','0%');
@@ -401,7 +431,9 @@ function updateStatus() {
     $("#manual-status-y").text(STATUS.y+'mm');
     $("#manual-status-z").text(STATUS.z+'mm');
     $("#manual-status-temp").text(STATUS.temp+"C");
+    $("#sidebar-status-temp").text(STATUS.temp+"C");
 }
+
 function move(name,val) {
     var args = {};
     args[name] = val;
@@ -435,6 +467,13 @@ function getPrinterStatus() {
         STATUS.e = result.e;
         STATUS.temp = result.temp;
         updateStatus();
+    });
+}
+
+function setTargetTemp(temp) {
+    var args = { temp: temp };
+    $.post('http://localhost:3589/temp',args, function(result, status) {
+        console.log("result = ",result,status);
     });
 }
 
@@ -480,11 +519,38 @@ $(document).ready(function() {
         $("#manual-upz").click(moveUpZ);
         $("#manual-downz").click(moveDownZ);
         $("#manual-home").click(moveHome);
+        $("#manual-temp").change(function() {
+            setTargetTemp(parseFloat($(this).val()));
+        });
+
+        //===== websocket monitoring
+        var wsurl = "ws:localhost:4202";
+        monitor = new WebSocket(wsurl);
+        monitor.onopen = function(e) {
+            console.log("opened the websocket for ",wsurl);
+        }
+        monitor.onclose = function(e) {
+            console.log("closed websocket");
+        }
+        monitor.onerror = function(e) {
+            console.log("error in websocket");
+        }
+        monitor.onmessage = function(e) {
+            var mess = JSON.parse(e.data);
+            console.log("got a message",mess);
+            if(mess.type == 'temp') {
+                console.log("updating temp");
+                STATUS.temp = parseFloat(mess.value);
+                updateStatus();
+            }
+        }
+
+
 
         //get the initial status
         getPrinterStatus();
 
-
+        // ===== file upload stuff
         $(document).on('change', '.btn-file :file', function() {
                 var input = $(this),
                     numFiles = input.get(0).files ? input.get(0).files.length : 1,
@@ -498,8 +564,9 @@ $(document).ready(function() {
             var log = numFiles > 1 ? numFiles + ' files selected' : label;
             input.val(log);
         });
-
         $("#upload-file").click(uploadFile);
+
+
 
     }
 
