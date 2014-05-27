@@ -1,0 +1,11 @@
+{
+  "name": "josherprint",
+  "description": "test code for OctoPrint upgrades",
+  "version": "0.0.0",
+  "dependencies": {
+    "express": "^4.3.1",
+    "body-parser": "^1.2.2",
+    "formidable": "^1.0.14",
+    "serialport": "^1.4.0"
+  }
+}
