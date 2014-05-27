@@ -79,7 +79,9 @@ SP.list(function(err,ports){
 
 //start up the serial port and webserver
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
-MessageQueue.openSerial("/dev/cu.usbmodem12341",startServer);
+startServer(function() {
+    MessageQueue.openSerial("/dev/cu.usbmodem12341");
+});
 
 
 function writeFile() {
@@ -150,7 +152,7 @@ Printer = {
     }
 }
 
-function startServer() {
+function startServer(cb) {
     console.log('starting webserver');
 
 
@@ -231,5 +233,7 @@ function startServer() {
     var server = app.listen(3589,function() {
         console.log('listening on port ', server.address().port);
     });
+
+    if(cb) cb();
 
 }
