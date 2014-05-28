@@ -68,6 +68,71 @@
   </head>
   <body>
 
+<!-- ============== Modals ============ -->
+<div class="modal fade" id='add-queue-dialog'>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Add STL File to Queue</h4>
+      </div>
+      <div class="modal-body">
+
+        <form role='form' class='form-horizontal' id='add-queue-form'>
+            <div class='form-group'>
+                <label class='col-sm-2 control-label'>Model</label>
+                <div class='input-group'>
+                    <span class='input-group-btn'>
+                        <span class='btn btn-default btn-file'>
+                            Select File <input type='file' id='fileinput'>
+                        </span>
+                    </span>
+                    <input type='text' class='form-control' readonly id='filenames'>
+                </div>
+            </div>
+            <div class='form-group'>
+                <label class='col-sm-2 control-label'>Speed</label>
+
+                <div class="btn-group" data-toggle="buttons">
+                  <label class="btn btn-default active">
+                    <input type="radio" name="options" id="option1" value='low' checked='true'> Low Quality / Fast
+                  </label>
+                  <label class="btn btn-default">
+                    <input type="radio" name="options" id="option2" value='high'> High Quality / Slow
+                  </label>
+                </div>
+
+            </div>
+            <div class='form-group'>
+                <label class='col-sm-2 control-label'>Mode</label>
+                <div class='btn-group' data-toggle='buttons'>
+                    <label class='btn btn-default active'>
+                        <input type='radio' value='normal' name='rim-mode' checked='true'>Normal
+                    </label>
+                    <label class='btn btn-default'>
+                        <input type='radio' value='vase'   name='rim-mode'>Vase
+                    </label>
+                </div>
+            </div>
+        </form>
+
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id='add-to-queue'>Add to Queue</button>
+      </div>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+
+
+
+
+
+
+
+
 <nav class='navbar navbar-default' role='navigation'>
     <div class='container-fluid'>
         <div class='navbar-header'>
@@ -115,60 +180,11 @@
         <div class='panel panel-default'>
             <div class='panel-heading'>Print Queue</div>
             <div class='panel-body'>
-
-
                 <ul class='list-group print-queue'>
-                    <!--
-                    <li class='list-group-item active'>
-                        <span class='label label-success'>printing 63%</span>
-                        File 1 <i>ETP: 1hr 62m</i>
-                    </li>
-                    <li class='list-group-item'>
-                        <span class='label label-primary'>slicing</span>
-                        File 2
-                        <button class='btn btn-default pull-right btn-xs'>
-                            <span class='glyphicon glyphicon-remove'></span>
-                        </button>
-                    </li>
-                    <li class='list-group-item'>
-                        <span class='label label-primary'>heating 58%</span>
-                        File 2
-                        <button class='btn btn-default pull-right btn-xs'>
-                            <span class='glyphicon glyphicon-remove'></span>
-                        </button>
-                    </li>
-                    <li class='list-group-item'>
-                        <span class='label label-primary'>waiting</span>
-                        File 3
-                        <button class='btn btn-default pull-right btn-xs'>
-                            <span class='glyphicon glyphicon-remove'></span>
-                        </button>
-                    </li>
-                -->
                 </ul>
 
-
-                <form role='form' class='form-inline'>
-                    <div class='col-xs-9'>
-                        <div class='input-group'>
-                            <span class='input-group-btn'>
-                                <span class='btn btn-default btn-file'>
-                                    Select File <input type='file' id='fileinput'>
-                                </span>
-                            </span>
-                            <input type='text' class='form-control' readonly id='filenames'>
-                        </div>
-                    </div>
-                    <div class='col-xs-3'>
-                        <button class='btn btn-primary' id='upload-file'>Add to Queue</button>
-                    </div>
-                </form>
-                <!--
-                <p>
-                    currently loaded: <i class='current-file'>foo.stl</i>
-                </p>
-                <button class='btn btn-primary' id='start-print'>print</button>
-            -->
+                <button id='add-to-queue' class='btn btn-primary'
+                    data-toggle='modal' data-target='#add-queue-dialog'>Add to Queue</button>
             </div>
         </div>
     </div>
@@ -616,9 +632,23 @@ $(document).ready(function() {
             var log = numFiles > 1 ? numFiles + ' files selected' : label;
             input.val(log);
         });
+
         $("#upload-file").click(uploadFile);
-
-
+        $("#add-to-queue").click(function() {
+            var form = document.getElementById('add-queue-form');
+            var data = new FormData(form);
+            data.append('stlfile',$("#fileinput")[0].files[0]);
+            $.ajax({
+                url:"http://localhost:3589/upload",
+                type:'POST',
+                data:data,
+                processData:false,
+                contentType:false,
+            }).done(function(result) {
+                $("#add-queue-dialog").modal('hide');
+                getPrintQueue();
+            });
+        });
 
     }
 
@@ -642,6 +672,8 @@ function fillLayers() {
     }
 }
     </script>
+
+
 
   </body>
   <script src='js/mustache.js'></script>
