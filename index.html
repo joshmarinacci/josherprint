@@ -113,24 +113,62 @@
 <div class='row mode-panel' id='standby-panel'>
     <div class='col-md-12'>
         <div class='panel panel-default'>
-            <div class='panel-heading'>Standby</div>
+            <div class='panel-heading'>Print Queue</div>
             <div class='panel-body'>
-                <form role='form'>
-                    <div class='input-group'>
-                        <span class='input-group-btn'>
-                            <span class='btn btn-default btn-file'>
-                                Browse STL File <input type='file' id='fileinput'>
-                            </span>
-                        </span>
-                        <input type='text' class='form-control' readonly id='filenames'>
-                    </div>
-                    <button class='btn btn-default' id='upload-file'>Upload</button>
-                </form>
 
+
+                <ul class='list-group print-queue'>
+                    <!--
+                    <li class='list-group-item active'>
+                        <span class='label label-success'>printing 63%</span>
+                        File 1 <i>ETP: 1hr 62m</i>
+                    </li>
+                    <li class='list-group-item'>
+                        <span class='label label-primary'>slicing</span>
+                        File 2
+                        <button class='btn btn-default pull-right btn-xs'>
+                            <span class='glyphicon glyphicon-remove'></span>
+                        </button>
+                    </li>
+                    <li class='list-group-item'>
+                        <span class='label label-primary'>heating 58%</span>
+                        File 2
+                        <button class='btn btn-default pull-right btn-xs'>
+                            <span class='glyphicon glyphicon-remove'></span>
+                        </button>
+                    </li>
+                    <li class='list-group-item'>
+                        <span class='label label-primary'>waiting</span>
+                        File 3
+                        <button class='btn btn-default pull-right btn-xs'>
+                            <span class='glyphicon glyphicon-remove'></span>
+                        </button>
+                    </li>
+                -->
+                </ul>
+
+
+                <form role='form' class='form-inline'>
+                    <div class='col-xs-9'>
+                        <div class='input-group'>
+                            <span class='input-group-btn'>
+                                <span class='btn btn-default btn-file'>
+                                    Select File <input type='file' id='fileinput'>
+                                </span>
+                            </span>
+                            <input type='text' class='form-control' readonly id='filenames'>
+                        </div>
+                    </div>
+                    <div class='col-xs-3'>
+                        <button class='btn btn-primary' id='upload-file'>Add to Queue</button>
+                    </div>
+                </form>
+                <!--
                 <p>
                     currently loaded: <i class='current-file'>foo.stl</i>
                 </p>
                 <button class='btn btn-primary' id='start-print'>print</button>
+            -->
             </div>
         </div>
     </div>
@@ -477,6 +515,16 @@ function setTargetTemp(temp) {
     });
 }
 
+function getPrintQueue() {
+    $.get("http://localhost:3589/queue",function(result,status) {
+        console.log("got the print queue ",result.queue);
+        var out = Mustache.render($("#print-queue-item-template").text(), result);
+        console.log("rendered",out);
+
+        $(".print-queue").empty().append(out);
+    });
+
+}
 function uploadFile(e) {
     e.preventDefault();
     var fileinput = $("#fileinput")[0];
@@ -491,10 +539,10 @@ function uploadFile(e) {
         contentType:false,
     }).done(function(result) {
         console.log("upload:",result);
-        STATUS.file = result.path;
-        $(".current-file").text(STATUS.file);
+        getPrintQueue();
     });
 };
+
 
 
 $(document).ready(function() {
@@ -537,11 +585,14 @@ $(document).ready(function() {
         }
         monitor.onmessage = function(e) {
             var mess = JSON.parse(e.data);
-            console.log("got a message",mess);
             if(mess.type == 'temp') {
-                console.log("updating temp");
                 STATUS.temp = parseFloat(mess.value);
                 updateStatus();
+                return;
+            }
+            console.log("got a message",mess);
+            if(mess.type == 'state') {
+                $("#sidebar-status-state").text(mess.value);
             }
         }
 
@@ -549,6 +600,7 @@ $(document).ready(function() {
 
         //get the initial status
         getPrinterStatus();
+        getPrintQueue();
 
         // ===== file upload stuff
         $(document).on('change', '.btn-file :file', function() {
@@ -590,5 +642,21 @@ function fillLayers() {
     }
 }
     </script>
+
   </body>
+  <script src='js/mustache.js'></script>
+<script type='text/mustache-template' id='print-queue-item-template'>
+{{#queue}}
+<li class='list-group-item' data-itemid='{{id}}'>
+    <button class='btn btn-default pull-right btn-xs'>
+        <span class='glyphicon glyphicon-remove'></span>
+    </button>
+    <span class='label label-success'>{{state}}</span>
+    {{name}}
+    <i>{{eta}}</i>
+</li>
+{{/queue}}
+
+</script>
+
 </html>

@@ -47,6 +47,23 @@ var STATUS = {
     gcodefile:null,
 }
 
+var printqueue = [
+/*
+    {
+        name:'foo1.stl',
+        state:'printing',
+        eta_sec:60*60*3,
+        id:'12341',
+    },
+    {
+        name:'foo2.stl',
+        state:'waiting',
+        id:'12342',
+    }
+    */
+];
+
+
 
 // imports
 var express = require('express');
@@ -75,6 +92,9 @@ SP.list(function(err,ports){
     console.log("ports",ports);
 });
 */
+
+
+
 
 var wslisteners = [];
 // ==== set up websocket for realtime monitoring
@@ -187,11 +207,53 @@ Printer = {
         MessageQueue.sendRequest(req, function() { cb(value); });
     },
     setTemp:function(temp, cb) {
+        STATUS.state = 'heating';
         MessageQueue.sendRequest('M109 S'+temp,function() {
+            STATUS.state = 'standby';
             cb(temp);
         });
     }
 }
+
+
+function setState(state) {
+    STATUS.state = state;
+    MessageQueue.broadcast({
+        type:"state",
+        value:state
+    });
+}
+
+function checkQueue() {
+    if(printqueue.length <= 0) return;
+    if(STATUS.state == "standby") {
+        console.log("someting is in the queue and we aren't printing yet");
+        var model = printqueue[0];
+        console.log("printing ",model.stlfile);
+        model.gcodefile = process.cwd()+"/foo.gcode";
+        setState('slicing');
+        slice(model.stlfile,model.gcodefile, function() {
+            console.log("done with slicing");
+            setState('heating');
+            Printer.setTemp(195, function(temp) {
+                console.log("reached target temp",temp);
+                Printer.goHome(function() {
+                    console.log('starting to print');
+                    //res.end(JSON.stringify({status:'ok'}));
+                    /*
+                    writeFile();
+                    */
+                });
+            });
+        });
+
+    }
+    if(STATUS.state == 'heating') {
+        console.log("still heating");
+    }
+}
+
+
 
 function startServer(cb) {
     console.log('starting webserver');
@@ -271,13 +333,27 @@ function startServer(cb) {
             STATUS.file = process.cwd()+"/toslice.stl";
             fs.renameSync(file.path,STATUS.file);
             console.log("new file = ",STATUS.file);
+            printqueue.push({
+                name:'new file',
+                stlfile:STATUS.file,
+                state:'waiting',
+            });
             res.end(JSON.stringify({
                 status:'ok',
                 path: STATUS.file,
             }));
-
+            checkQueue();
         });
     });
+
+    app.get("/queue",function(req,res) {
+        var queueinfo = {
+            status:"ok",
+            queue: printqueue,
+            id: "id"+Math.floor(Math.random()*100000)+"",
+        }
+        res.end(JSON.stringify(queueinfo));
+    })
 
     var server = app.listen(3589,function() {
         console.log('listening on port ', server.address().port);
