@@ -120,12 +120,14 @@ MessageQueue.broadcast = function(mess) {
 }
 
 startServer(function() {
+    /*
     MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
         console.log('sending a request');
         MessageQueue.sendRequest('M110',function(m) {
             console.log("m = ",m);
         });
     });
+    */
 });
 
 
@@ -329,6 +331,7 @@ function startServer(cb) {
     app.post('/upload', function(req,res) {
         var form = new formidable.IncomingForm();
         form.parse(req, function(err, fields, files) {
+            console.log(err,fields,files);
             var file = files.stlfile;
             STATUS.file = process.cwd()+"/toslice.stl";
             fs.renameSync(file.path,STATUS.file);

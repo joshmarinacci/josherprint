@@ -431,12 +431,13 @@
     <script src="js/bootstrap.min.js"></script>
 
 <script type='text/javascript'>
-var LIVE = true;
+var LIVE = false;
 
 function startPrint() {
     $(".mode-panel").hide();
     $("#printing-panel").show();
 }
+/*
 function startHeat() {
     $("#sidebar-status-state").text("Heating");
     $(".mode-panel").hide();
@@ -464,6 +465,7 @@ function startHeat() {
     }
 
 }
+*/
 function toggle(id) {
     return function(e) {
         e.preventDefault();
@@ -498,66 +500,135 @@ function move(name,val) {
 }
 
 
-function moveLeft() {  move('x',STATUS.x-5); };
-function moveRight() { move('x',STATUS.x+5); };
-function moveUp() {    move('y',STATUS.y+5); };
-function moveDown() {  move('y',STATUS.y-5); };
-function moveUpZ() {   move('z',STATUS.z+5); };
-function moveDownZ() { move('z',STATUS.z-5); };
+var server = {
+    moveLeft:  function() { move('x',STATUS.x-5); },
+    moveRight: function() { move('x',STATUS.x+5); },
+    moveUp:    function() { move('y',STATUS.y+5); },
+    moveDown:  function() { move('y',STATUS.y-5); },
+    moveUpZ:   function() { move('z',STATUS.z+5); },
+    moveDownZ: function() { move('z',STATUS.z-5); },
+    moveHome:  function() {
+        var args = {};
+        $.post('http://localhost:3589/home',args, function(result, status) {
+            console.log("result = ",result,status);
+            getPrinterStatus();
+        });
+    },
+    getPrinterStatus: function() {
+        $.get("http://localhost:3589/status",function(result,status) {
+            STATUS.x = parseFloat(result.x);
+            STATUS.y = result.y;
+            STATUS.z = result.z;
+            STATUS.e = result.e;
+            STATUS.temp = result.temp;
+            updateStatus();
+        });
+    },
+    setTargetTemp: function(temp) {
+        var args = { temp: temp };
+        $.post('http://localhost:3589/temp',args, function(result, status) {
+            console.log("result = ",result,status);
+        });
+    },
+    addToQueue: function() {
+        var form = document.getElementById('add-queue-form');
+        var data = new FormData(form);
+        data.append('stlfile',$("#fileinput")[0].files[0]);
+        $.ajax({
+            url:"http://localhost:3589/upload",
+            type:'POST',
+            data:data,
+            processData:false,
+            contentType:false,
+        }).done(function(result) {
+            $("#add-queue-dialog").modal('hide');
+            server.getPrintQueue();
+        });
+    },
 
-function moveHome() {
-    var args = {};
-    $.post('http://localhost:3589/home',args, function(result, status) {
-        console.log("result = ",result,status);
-        getPrinterStatus();
-    });
+    getPrintQueue: function() {
+        $.get("http://localhost:3589/queue",function(result,status) {
+            console.log("got the print queue ",result.queue);
+            var out = Mustache.render($("#print-queue-item-template").text(), result);
+            console.log("rendered",out);
+            $(".print-queue").empty().append(out);
+        });
+    },
+
 }
 
-function getPrinterStatus() {
-    $.get("http://localhost:3589/status",function(result,status) {
-        STATUS.x = parseFloat(result.x);
-        STATUS.y = result.y;
-        STATUS.z = result.z;
-        STATUS.e = result.e;
-        STATUS.temp = result.temp;
+var fakeServer = {
+    print_queue: [{
+        name:'robot.stl',
+        id:'foo',
+        state:'printing',
+        eta:'1hr 30min',
+        status:'68% complete',
+    },
+    {
+        name:'plate.stl',
+        id:'plate',
+        state:'waiting',
+        eta:'8hr 16min',
+    },
+    ],
+    moveLeft:     function() { STATUS.x -= 5; updateStatus(); },
+    moveRight:    function() { STATUS.x += 5; updateStatus(); },
+    moveUp:       function() { STATUS.y += 5; updateStatus(); },
+    moveDown:     function() { STATUS.y -= 5; updateStatus(); },
+    moveDownZ:    function() { STATUS.z -= 5; updateStatus(); },
+    moveUpZ:      function() { STATUS.z += 5; updateStatus(); },
+    moveHome:     function() {
+        STATUS.x = 0;
+        STATUS.y = 0;
+        STATUS.z = 0;
         updateStatus();
-    });
-}
-
-function setTargetTemp(temp) {
-    var args = { temp: temp };
-    $.post('http://localhost:3589/temp',args, function(result, status) {
-        console.log("result = ",result,status);
-    });
-}
-
-function getPrintQueue() {
-    $.get("http://localhost:3589/queue",function(result,status) {
-        console.log("got the print queue ",result.queue);
-        var out = Mustache.render($("#print-queue-item-template").text(), result);
-        console.log("rendered",out);
-
+    },
+    getPrinterStatus: function() {
+        //no-op
+    },
+    setTargetTemp: function(temp) {
+        var id = setInterval(function() {
+            if(Math.abs(STATUS.temp-temp) < 10) {
+                STATUS.temp = temp;
+                updateStatus();
+                clearInterval(id);
+                return;
+            }
+            if(STATUS.temp > temp) {
+                STATUS.temp -= 10;
+            } else {
+                STATUS.temp += 10;
+            }
+            updateStatus();
+        },500);
+    },
+    addToQueue: function() {
+        console.log("adding to queue");
+        $("#add-queue-dialog").modal('hide');
+        server.print_queue.push({
+            name:'foo',
+            id:'foo',
+            state:'slicing',
+            eta:10*10*60,
+        });
+        server.getPrintQueue();
+    },
+    getPrintQueue: function() {
+        console.log('getting print queue');
+        var out = Mustache.render($("#print-queue-item-template").text(), {queue:server.print_queue});
+        console.log("out = ",out);
         $(".print-queue").empty().append(out);
-    });
-
+    },
 }
-function uploadFile(e) {
-    e.preventDefault();
-    var fileinput = $("#fileinput")[0];
-    console.log("file input = ", fileinput.files[0]);
-    var data = new FormData();
-    data.append('stlfile',fileinput.files[0]);
-    $.ajax({
-        url:"http://localhost:3589/upload",
-        type:'POST',
-        data:data,
-        processData:false,
-        contentType:false,
-    }).done(function(result) {
-        console.log("upload:",result);
-        getPrintQueue();
-    });
-};
+
+if(!LIVE) {
+    server = fakeServer;
+}
+
+
+
+
 
 
 
@@ -566,26 +637,26 @@ $(document).ready(function() {
     $("#standby-panel").show();
     //$("#printing-panel").show();
 
-    $("#start-print").click(startHeat);
+    //$("#start-print").click(startHeat);
     $("#login-menu").click(toggle('#login-panel'));
     $("#about-menu").click(toggle('#about-panel'));
     $("#manual-menu").click(toggle('#manual-panel'));
     $("#settings-menu").click(toggle('#settings-panel'));
     $("#camera-menu").click(toggle('#camera-panel'));
     $("#home-menu").click(toggle('#standby-panel'));
-    fillLayers();
+    //fillLayers();
 
+    $("#manual-left").click(server.moveLeft);
+    $("#manual-right").click(server.moveRight);
+    $("#manual-up").click(server.moveUp);
+    $("#manual-down").click(server.moveDown);
+    $("#manual-upz").click(server.moveUpZ);
+    $("#manual-downz").click(server.moveDownZ);
+    $("#manual-home").click(server.moveHome);
+    $("#manual-temp").change(function() {
+        server.setTargetTemp(parseFloat($(this).val()));
+    });
     if(LIVE) {
-        $("#manual-left").click(moveLeft);
-        $("#manual-right").click(moveRight);
-        $("#manual-up").click(moveUp);
-        $("#manual-down").click(moveDown);
-        $("#manual-upz").click(moveUpZ);
-        $("#manual-downz").click(moveDownZ);
-        $("#manual-home").click(moveHome);
-        $("#manual-temp").change(function() {
-            setTargetTemp(parseFloat($(this).val()));
-        });
 
         //===== websocket monitoring
         var wsurl = "ws:localhost:4202";
@@ -611,48 +682,27 @@ $(document).ready(function() {
                 $("#sidebar-status-state").text(mess.value);
             }
         }
-
-
-
-        //get the initial status
-        getPrinterStatus();
-        getPrintQueue();
-
-        // ===== file upload stuff
-        $(document).on('change', '.btn-file :file', function() {
-                var input = $(this),
-                    numFiles = input.get(0).files ? input.get(0).files.length : 1,
-                    label = input.val().replace(/\\/g, '/').replace(/.*\//, '');
-                input.trigger('fileselect', [numFiles, label]);
-        });
-        $('.btn-file :file').on('fileselect', function(event, numFiles, label) {
-            console.log('file count',numFiles);
-            console.log('names',label);
-            var input = $(this).parents('.input-group').find(':text');
-            var log = numFiles > 1 ? numFiles + ' files selected' : label;
-            input.val(log);
-        });
-
-        $("#upload-file").click(uploadFile);
-        $("#add-to-queue").click(function() {
-            var form = document.getElementById('add-queue-form');
-            var data = new FormData(form);
-            data.append('stlfile',$("#fileinput")[0].files[0]);
-            $.ajax({
-                url:"http://localhost:3589/upload",
-                type:'POST',
-                data:data,
-                processData:false,
-                contentType:false,
-            }).done(function(result) {
-                $("#add-queue-dialog").modal('hide');
-                getPrintQueue();
-            });
-        });
-
     }
 
+    // ===== file upload stuff
+    $(document).on('change', '.btn-file :file', function() {
+            var input = $(this),
+                numFiles = input.get(0).files ? input.get(0).files.length : 1,
+                label = input.val().replace(/\\/g, '/').replace(/.*\//, '');
+            input.trigger('fileselect', [numFiles, label]);
+    });
+    $('.btn-file :file').on('fileselect', function(event, numFiles, label) {
+        console.log('file count',numFiles);
+        console.log('names',label);
+        var input = $(this).parents('.input-group').find(':text');
+        var log = numFiles > 1 ? numFiles + ' files selected' : label;
+        input.val(log);
+    });
 
+    $("#add-to-queue").click(server.addToQueue);
+
+    server.getPrinterStatus();
+    server.getPrintQueue();
 
 });
 
@@ -686,6 +736,7 @@ function fillLayers() {
     <span class='label label-success'>{{state}}</span>
     {{name}}
     <i>{{eta}}</i>
+    <b>{{status}}</b>
 </li>
 {{/queue}}
 
