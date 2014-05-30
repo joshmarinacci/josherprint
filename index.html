@@ -179,6 +179,19 @@
         <div class='panel panel-default'>
             <div class='panel-heading'>Print Queue</div>
             <div class='panel-body'>
+
+                <ul class='list-group' id='print-current'>
+                    <li class='list-group-item'>
+                        <button id='pause-print' class='btn btn-danger pull-right'>Pause</button>
+                        <span class='label label-primary state'>foo</span><br/>
+                        filename: <b class='filename'>Awesome.stl</b><br/>
+                        time left: <b class='timeleft'>8hrs 2min</b><br/>
+                        complete:  <b class='complete'>68%</b><br/>
+                    </li>
+                </ul>
+
+                <button id='print-next' class='btn btn-primary'>Print Next</button>
+
                 <ul class='list-group print-queue'>
                 </ul>
 
@@ -463,20 +476,37 @@ var server = {
 }
 
 var fakeServer = {
-    print_queue: [{
-        name:'robot.stl',
-        id:'foo',
-        state:'printing',
-        eta:'1hr 30min',
-        status:'68% complete',
-    },
-    {
-        name:'plate.stl',
-        id:'plate',
+
+    current_print: {
+        name:'active.stl',
+        id:'blah',
         state:'waiting',
-        eta:'8hr 16min',
+        eta:'1hr 30min',
+        percent:50,
     },
+
+    print_queue: [
+        {
+            name:'robot.stl',
+            id:'foo',
+            state:'printing',
+            eta:'1hr 30min',
+        },
+        {
+            name:'plate.stl',
+            id:'plate',
+            state:'waiting',
+            eta:'8hr 16min',
+        },
     ],
+
+    setup: function() {
+        $("#print-current .state").text('standby');
+        $("#print-current .filename").text('');
+        $("#print-current .timeleft").text('');
+        $("#print-current .complete").text('');
+    },
+
     moveLeft:     function() { STATUS.x -= 5; updateStatus(); },
     moveRight:    function() { STATUS.x += 5; updateStatus(); },
     moveUp:       function() { STATUS.y += 5; updateStatus(); },
@@ -520,17 +550,42 @@ var fakeServer = {
         server.getPrintQueue();
     },
     getPrintQueue: function() {
-        console.log('getting print queue');
         var out = Mustache.render($("#print-queue-item-template").text(), {queue:server.print_queue});
-        console.log("out = ",out);
         $(".print-queue").empty().append(out);
     },
+
+    printNext: function() {
+        console.log("pretending to print the next one");
+        server.current_print = server.print_queue.shift();
+        server.current_print.percent = 0;
+        server.getPrintQueue();
+        server.current_print.state = 'heating';
+        updateCurrentStatus(server.current_print);
+
+        setTimeout(function(){
+            var id = setInterval(function() {
+                server.current_print.percent +=5;
+                server.current_print.state = 'printing';
+                updateCurrentStatus(server.current_print);
+
+                if(server.current_print.percent >= 100) {
+                    clearInterval(id);
+                    server.current_print.state = 'done!';
+                    updateCurrentStatus(server.current_print);
+                }
+            },250);
+
+        },2000);
+    },
+
 }
 
-
-
-
-
+function updateCurrentStatus(current) {
+    $("#print-current .state")   .text(current.state);
+    $("#print-current .filename").text(current.name);
+    $("#print-current .timeleft").text(current.eta);
+    $("#print-current .complete").text(current.percent+"%");
+}
 
 
 
@@ -549,6 +604,9 @@ $(document).ready(function() {
     $("#settings-menu").click(toggle('#settings-panel'));
     $("#camera-menu").click(toggle('#camera-panel'));
     $("#home-menu").click(toggle('#main-panel'));
+
+    $("#print-next").click(server.printNext);
+
     //fillLayers();
 
     $("#manual-left").click(server.moveLeft);
@@ -605,7 +663,7 @@ $(document).ready(function() {
         }
     }
 
-
+    server.setup();
     server.getPrinterStatus();
     server.getPrintQueue();
 
@@ -628,10 +686,8 @@ $(document).ready(function() {
             <button class='btn btn-default pull-right btn-xs'>
                 <span class='glyphicon glyphicon-remove'></span>
             </button>
-            <span class='label label-success'>{{state}}</span>
-            {{name}}
-            <i>{{eta}}</i>
-            <b>{{status}}</b>
+            filename: <b>{{name}}</b><br/>
+            estimated print time: <b>{{eta}}</b><br/>
         </li>
     {{/queue}}
 </script>
