@@ -129,10 +129,6 @@
 
 
 
-
-
-
-
 <nav class='navbar navbar-default' role='navigation'>
     <div class='container-fluid'>
         <div class='navbar-header'>
@@ -165,17 +161,20 @@
 <div class='container-fluid'>
 
     <div class='row'>
-        <div class='col-md-4'>
-            <div class='panel panel-default'>
-                <p>current temp: <b id='sidebar-status-temp'>-99C</b></p>
-                <p>state: <b id='sidebar-status-state'>standby</b></p>
-            </div>
-        </div>
+
+<!-- ========= SIDEBAR =========== -->
+<div class='col-md-4'>
+    <div class='panel panel-default'>
+        <p>current temp: <b id='sidebar-status-temp'>-99C</b></p>
+        <p>state: <b id='sidebar-status-state'>standby</b></p>
+    </div>
+</div>
 
 
         <div class='col-md-8'>
 
-<div class='row mode-panel' id='standby-panel'>
+
+<div class='row mode-panel' id='main-panel'>
     <div class='col-md-12'>
         <div class='panel panel-default'>
             <div class='panel-heading'>Print Queue</div>
@@ -190,67 +189,6 @@
     </div>
 </div>
 
-<div class='row mode-panel' id='heating-panel'>
-    <div class='col-md-12'>
-        <div class='panel panel-default'>
-            <div class='panel-heading'>Heating</div>
-
-            <div class='panel-body'>
-
-                <h4>Slicing</h4>
-
-                <div class="progress progress-striped">
-                  <div id='slicing-progress' class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
-                    <span class="sr-only">0% Complete (success)</span>
-                  </div>
-                </div>
-
-                <h4>Temperature</h4>
-
-                <div class="progress progress-striped">
-                  <div id='heating-progress' class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
-                    <span class="sr-only">0% Complete (success)</span>
-                  </div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class='row mode-panel' id='printing-panel'>
-    <div class='col-md-12'>
-        <div class='panel panel-default'>
-            <h3 class='panel-heading'>Printing <i>foo.stl</i></h3>
-            <div class='panel-body'>
-
-                <div class='row'>
-                    <div class='col-xs-4'>
-                        <canvas id='layer-canvas' width='100' height='300'></canvas>
-                    </div>
-                    <div class='col-xs-8'>
-                        <div class='row'>
-                            <div class='col-xs-12 current-percent'>68%</div>
-                        </div>
-                        <div class='row'>
-                            <div class='col-xs-12 current-layer'>layer 45 of 80</div>
-                        </div>
-                        <div class='row'>
-                            <div class='col-xs-12 current-time-label'>time left</div>
-                        </div>
-                        <div class='row'>
-                            <div class='col-xs-12 current-time-amount'>1h 30m 45sec</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class='panel-footer'>
-                <button class='btn btn-primary'>pause</button>
-                <button class='btn btn-danger'>cancel</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class='row mode-panel' id='about-panel'>
     <div class='col-md-12'>
@@ -433,39 +371,6 @@
 <script type='text/javascript'>
 var LIVE = false;
 
-function startPrint() {
-    $(".mode-panel").hide();
-    $("#printing-panel").show();
-}
-/*
-function startHeat() {
-    $("#sidebar-status-state").text("Heating");
-    $(".mode-panel").hide();
-    $("#heating-panel").show();
-    $("#heating-progress").css('width','0%');
-    $("#slicing-progress").css('width','0%');
-    if(LIVE) {
-        $.post('http://localhost:3589/print', function(result, status) {
-            console.log("print = ",result);
-            console.log("target temp reached");
-            $("#heating-progress").css('width','100%');
-            $("#slicing-progress").css('width','100%');
-            startPrint();
-        });
-    } else {
-        setTimeout(function() {
-            $("#slicing-progress").css('width','100%');
-            $("#heating-progress").css('width','50%');
-            //startPrint();
-        },1000);
-        setTimeout(function() {
-            $("#heating-progress").css('width','100%');
-            setTimeout(startPrint,1000);
-        },2000);
-    }
-
-}
-*/
 function toggle(id) {
     return function(e) {
         e.preventDefault();
@@ -511,7 +416,7 @@ var server = {
         var args = {};
         $.post('http://localhost:3589/home',args, function(result, status) {
             console.log("result = ",result,status);
-            getPrinterStatus();
+            server.getPrinterStatus();
         });
     },
     getPrinterStatus: function() {
@@ -622,9 +527,6 @@ var fakeServer = {
     },
 }
 
-if(!LIVE) {
-    server = fakeServer;
-}
 
 
 
@@ -633,9 +535,12 @@ if(!LIVE) {
 
 
 $(document).ready(function() {
+    if(!LIVE) {
+        server = fakeServer;
+    }
+
     $(".mode-panel").hide();
-    $("#standby-panel").show();
-    //$("#printing-panel").show();
+    $("#main-panel").show();
 
     //$("#start-print").click(startHeat);
     $("#login-menu").click(toggle('#login-panel'));
@@ -643,7 +548,7 @@ $(document).ready(function() {
     $("#manual-menu").click(toggle('#manual-panel'));
     $("#settings-menu").click(toggle('#settings-panel'));
     $("#camera-menu").click(toggle('#camera-panel'));
-    $("#home-menu").click(toggle('#standby-panel'));
+    $("#home-menu").click(toggle('#main-panel'));
     //fillLayers();
 
     $("#manual-left").click(server.moveLeft);
@@ -653,9 +558,25 @@ $(document).ready(function() {
     $("#manual-upz").click(server.moveUpZ);
     $("#manual-downz").click(server.moveDownZ);
     $("#manual-home").click(server.moveHome);
-    $("#manual-temp").change(function() {
-        server.setTargetTemp(parseFloat($(this).val()));
+    $("#manual-temp").change(function() { server.setTargetTemp(parseFloat($(this).val()));  });
+
+    // ===== file upload stuff
+    $(document).on('change', '.btn-file :file', function() {
+            var input = $(this),
+                numFiles = input.get(0).files ? input.get(0).files.length : 1,
+                label = input.val().replace(/\\/g, '/').replace(/.*\//, '');
+            input.trigger('fileselect', [numFiles, label]);
     });
+    $('.btn-file :file').on('fileselect', function(event, numFiles, label) {
+        console.log('file count',numFiles);
+        console.log('names',label);
+        var input = $(this).parents('.input-group').find(':text');
+        var log = numFiles > 1 ? numFiles + ' files selected' : label;
+        input.val(log);
+    });
+
+    $("#add-to-queue").click(server.addToQueue);
+
     if(LIVE) {
 
         //===== websocket monitoring
@@ -684,22 +605,6 @@ $(document).ready(function() {
         }
     }
 
-    // ===== file upload stuff
-    $(document).on('change', '.btn-file :file', function() {
-            var input = $(this),
-                numFiles = input.get(0).files ? input.get(0).files.length : 1,
-                label = input.val().replace(/\\/g, '/').replace(/.*\//, '');
-            input.trigger('fileselect', [numFiles, label]);
-    });
-    $('.btn-file :file').on('fileselect', function(event, numFiles, label) {
-        console.log('file count',numFiles);
-        console.log('names',label);
-        var input = $(this).parents('.input-group').find(':text');
-        var log = numFiles > 1 ? numFiles + ' files selected' : label;
-        input.val(log);
-    });
-
-    $("#add-to-queue").click(server.addToQueue);
 
     server.getPrinterStatus();
     server.getPrintQueue();
@@ -707,39 +612,28 @@ $(document).ready(function() {
 });
 
 
-function fillLayers() {
-    var ctx = $("#layer-canvas")[0].getContext('2d');
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0,0, 100,300);
-    ctx.strokeStyle = '#ff9999';
-    ctx.fillStyle = '#cc4444';
-
-    var maxlayers = 60;
-    var layerwidth = Math.floor(300/maxlayers);
-    for(var i=0; i<45; i++) {
-        ctx.fillRect(1,       300-i*(layerwidth),     100-2, layerwidth-2);
-        ctx.strokeRect(1+0.5, 300-i*(layerwidth)+0.5, 100-3, layerwidth-2);
-    }
-}
     </script>
 
 
 
   </body>
-  <script src='js/mustache.js'></script>
-<script type='text/mustache-template' id='print-queue-item-template'>
-{{#queue}}
-<li class='list-group-item' data-itemid='{{id}}'>
-    <button class='btn btn-default pull-right btn-xs'>
-        <span class='glyphicon glyphicon-remove'></span>
-    </button>
-    <span class='label label-success'>{{state}}</span>
-    {{name}}
-    <i>{{eta}}</i>
-    <b>{{status}}</b>
-</li>
-{{/queue}}
 
+<script src='js/mustache.js'></script>
+
+
+<!-- =========== Mustache Templates ============== -->
+<script type='text/mustache-template' id='print-queue-item-template'>
+    {{#queue}}
+        <li class='list-group-item' data-itemid='{{id}}'>
+            <button class='btn btn-default pull-right btn-xs'>
+                <span class='glyphicon glyphicon-remove'></span>
+            </button>
+            <span class='label label-success'>{{state}}</span>
+            {{name}}
+            <i>{{eta}}</i>
+            <b>{{status}}</b>
+        </li>
+    {{/queue}}
 </script>
 
 </html>
