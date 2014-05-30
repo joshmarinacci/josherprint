@@ -382,7 +382,7 @@
     <script src="js/bootstrap.min.js"></script>
 
 <script type='text/javascript'>
-var LIVE = false;
+var LIVE = true;
 
 function toggle(id) {
     return function(e) {
@@ -419,6 +419,40 @@ function move(name,val) {
 
 
 var server = {
+
+    setup: function() {
+        //===== websocket monitoring
+        var wsurl = "ws:localhost:4202";
+        var monitor = new WebSocket(wsurl);
+        monitor.onopen = function(e) {
+            console.log("opened the websocket for ",wsurl);
+        }
+        monitor.onclose = function(e) {
+            console.log("closed websocket");
+        }
+        monitor.onerror = function(e) {
+            console.log("error in websocket");
+        }
+        monitor.onmessage = function(e) {
+            var mess = JSON.parse(e.data);
+            if(mess.type == 'temp') {
+                STATUS.temp = parseFloat(mess.value);
+                updateStatus();
+                return;
+            }
+            console.log("got a message",mess);
+            if(mess.type == 'state') {
+                $("#sidebar-status-state").text(mess.value);
+                $("#print-current .state").text(mess.value);
+            }
+        }
+
+        $("#print-current .state").text('standby');
+        $("#print-current .filename").text('');
+        $("#print-current .timeleft").text('');
+        $("#print-current .complete").text('');
+
+    },
     moveLeft:  function() { move('x',STATUS.x-5); },
     moveRight: function() { move('x',STATUS.x+5); },
     moveUp:    function() { move('y',STATUS.y+5); },
@@ -472,6 +506,14 @@ var server = {
             $(".print-queue").empty().append(out);
         });
     },
+    printNext: function() {
+        console.log("printing next thing in the queue");
+        $.post("http://localhost:3589/print", function(result,status) {
+            console.log("requested the first thing in the queue to be printed",result);
+            updateCurrentStatus(result.item);
+            server.getPrintQueue();
+        });
+    }
 
 }
 
@@ -637,30 +679,6 @@ $(document).ready(function() {
 
     if(LIVE) {
 
-        //===== websocket monitoring
-        var wsurl = "ws:localhost:4202";
-        monitor = new WebSocket(wsurl);
-        monitor.onopen = function(e) {
-            console.log("opened the websocket for ",wsurl);
-        }
-        monitor.onclose = function(e) {
-            console.log("closed websocket");
-        }
-        monitor.onerror = function(e) {
-            console.log("error in websocket");
-        }
-        monitor.onmessage = function(e) {
-            var mess = JSON.parse(e.data);
-            if(mess.type == 'temp') {
-                STATUS.temp = parseFloat(mess.value);
-                updateStatus();
-                return;
-            }
-            console.log("got a message",mess);
-            if(mess.type == 'state') {
-                $("#sidebar-status-state").text(mess.value);
-            }
-        }
     }
 
     server.setup();

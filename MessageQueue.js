@@ -27,7 +27,9 @@ exports.MessageQueue = {
     sendCommands:function(arr) {
         var self = this;
         arr.forEach(function(cmd) {
-            self.sendRequest(cmd,function(){console.log("done",cmd)});
+            self.sendRequest(cmd,function(){
+                self.checkQueue();
+            });
         });
     },
 
@@ -44,12 +46,27 @@ exports.MessageQueue = {
 
     checkQueue:function() {
         if(this.queueWaiting) {
-            console.log("waiting for the queue");
+            //console.log("waiting for the queue");
         } else {
             if(this.cbqueue.length > 0) {
                 var command = this.cbqueue[0];
-                //console.log("going to send",command.cmd);
-                var cm = this.appendChecksum("N"+this.linecount+" "+command.cmd);
+                var cm = command.cmd;
+                //strip trailing comments
+                if(cm.indexOf(';') >=0)  cm = cm.substring(0,cm.indexOf(';'));
+
+                //strip whitespace
+                cm = cm.trim();
+
+                //skip empty lines (which used to be comments)
+                if(cm.length == 0) {
+                    this.cbqueue.shift();
+                    this.checkQueue();
+                    return;
+                }
+
+                //add the checksum
+                cm = this.appendChecksum("N"+this.linecount+" "+cm);
+                console.log("sending",cm);
                 this.linecount++;
                 this.queueWaiting = true;
                 this.serialPort.write(cm+'\n',function(err,results) {
@@ -73,12 +90,13 @@ exports.MessageQueue = {
                 var lines = str.split("\n");
                 lines.forEach(function(line) {
                     //console.log("line = -",line,"-");
+                    if(line == 'ok') { console.log("==== ok ===="); }
                     if(line == "" || line == "\n" || line == "  ") {
                         return;
                     }
                     if(line[0] == 'T' && line[1] == ':') {
                         var temp = line.match(/T:(\d+\.\d+)/);
-                        console.log("temp: ",temp[1]);
+                        //console.log("temp: ",temp[1]);
                         self.broadcast({
                             type:"temp",
                             value:temp[1],

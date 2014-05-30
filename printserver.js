@@ -120,20 +120,19 @@ MessageQueue.broadcast = function(mess) {
 }
 
 startServer(function() {
-    /*
     MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
         console.log('sending a request');
         MessageQueue.sendRequest('M110',function(m) {
             console.log("m = ",m);
+            //writeFile(process.cwd()+"/toprint.gcode");
         });
     });
-    */
 });
 
 
-function writeFile() {
-    console.log("loading gcode file",STATUS.gcodefile);
-    var gcode = fs.readFileSync(STATUS.gcodefile);
+function writeFile(gcodefile) {
+    console.log("loading gcode file",gcodefile);
+    var gcode = fs.readFileSync(gcodefile);
     var lines = gcode.toString().split("\n");
     console.log("gcode line count ",lines.length);
     MessageQueue.sendCommands(lines);
@@ -163,8 +162,11 @@ function slice(inpath, outpath,cb) {
 
 Printer = {
     goHome: function(cb) {
-        console.log("goHome");
-        MessageQueue.sendRequest('G28',cb);
+        setState('homing');
+        MessageQueue.sendRequest('G28',function() {
+            setState('standby');
+            if(cb) cb();
+        });
     },
     getTemp: function(cb) {
         console.log("getTemp");
@@ -209,9 +211,9 @@ Printer = {
         MessageQueue.sendRequest(req, function() { cb(value); });
     },
     setTemp:function(temp, cb) {
-        STATUS.state = 'heating';
+        setState('heating');
         MessageQueue.sendRequest('M109 S'+temp,function() {
-            STATUS.state = 'standby';
+            setState('standby');
             cb(temp);
         });
     }
@@ -226,40 +228,9 @@ function setState(state) {
     });
 }
 
-function checkQueue() {
-    if(printqueue.length <= 0) return;
-    if(STATUS.state == "standby") {
-        console.log("someting is in the queue and we aren't printing yet");
-        var model = printqueue[0];
-        console.log("printing ",model.stlfile);
-        model.gcodefile = process.cwd()+"/foo.gcode";
-        setState('slicing');
-        slice(model.stlfile,model.gcodefile, function() {
-            console.log("done with slicing");
-            setState('heating');
-            Printer.setTemp(195, function(temp) {
-                console.log("reached target temp",temp);
-                Printer.goHome(function() {
-                    console.log('starting to print');
-                    //res.end(JSON.stringify({status:'ok'}));
-                    /*
-                    writeFile();
-                    */
-                });
-            });
-        });
-
-    }
-    if(STATUS.state == 'heating') {
-        console.log("still heating");
-    }
-}
-
-
 
 function startServer(cb) {
     console.log('starting webserver');
-
 
     app.get("/status",function(req,res) {
         Printer.getTemp(function(temp) {
@@ -305,24 +276,27 @@ function startServer(cb) {
     });
 
     app.post("/temp",function(req,res) {
-        console.log("temp = ",req.param('temp'));
         Printer.setTemp(parseFloat(req.param('temp')), function(temp) {
-            console.log("reached target temp",temp);
             res.end(JSON.stringify({status:'ok'}));
         });
     });
 
     app.post("/print",function(req,res){
-        console.log("printing ",STATUS.file);
-        STATUS.gcodefile = process.cwd()+"/foo.gcode";
-        slice(STATUS.file,STATUS.gcodefile,function() {
+        var item = printqueue.shift();
+        item.percent = 0;
+        console.log("printing ",item.file);
+        item.gcodefile = process.cwd()+"/toprint.gcode";
+        res.end(JSON.stringify({status:'ok',item:item}));
+        setState('slicing');
+        slice(item.file,item.gcodefile,function() {
             console.log("done with slicing");
-            Printer.setTemp(195, function(temp) {
-                console.log("reached target temp",temp);
-                Printer.goHome(function() {
+            Printer.goHome(function() {
+                Printer.setTemp(195, function(temp) {
+                    setState('standby');
+                    console.log("reached target temp",temp);
                     console.log('starting to print');
-                    res.end(JSON.stringify({status:'ok'}));
-                    writeFile();
+                    setState('printing');
+                    writeFile(item.gcodefile);
                 });
             });
         });
@@ -333,19 +307,18 @@ function startServer(cb) {
         form.parse(req, function(err, fields, files) {
             console.log(err,fields,files);
             var file = files.stlfile;
-            STATUS.file = process.cwd()+"/toslice.stl";
-            fs.renameSync(file.path,STATUS.file);
-            console.log("new file = ",STATUS.file);
-            printqueue.push({
-                name:'new file',
-                stlfile:STATUS.file,
-                state:'waiting',
-            });
+            var newitem = {
+                file : process.cwd()+"/toslice"+Math.floor(Math.random()*10*1000)+".stl",
+                name: 'new file',
+                state: 'waiting',
+            }
+            fs.renameSync(file.path,newitem.file);
+            printqueue.push(newitem);
+            console.log("new file = ",newitem);
             res.end(JSON.stringify({
                 status:'ok',
-                path: STATUS.file,
+                item: newitem,
             }));
-            checkQueue();
         });
     });
 
