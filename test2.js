@@ -6,10 +6,9 @@ var fs = require('fs');
 //ometajs.compile('./gcode.ometajs')
 
 var GCode = require('./gcode.ometajs').GCode;
-var text = fs.readFileSync("boomerang.gcode").toString();
-var tt = text.substring(0,50);
-for(var i=0;i<tt.length; i++) {
-//    console.log("tt = ",tt[i],tt[i].charCodeAt(0));
-}
-console.log("text = ",text.substring(0,200));
+var text = fs.readFileSync("test.gcode").toString();
+
+console.log("text ="+text);
+console.log("========");
 GCode.matchAll(text,'start');
+console.log("gcode len = ", text.length);
