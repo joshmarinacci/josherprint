@@ -6,9 +6,13 @@ var fs = require('fs');
 //ometajs.compile('./gcode.ometajs')
 
 var GCode = require('./gcode.ometajs').GCode;
+
+
 var text = fs.readFileSync("test.gcode").toString();
 
-console.log("text ="+text);
+//console.log("text ="+text);
 console.log("========");
 GCode.matchAll(text,'start');
 console.log("gcode len = ", text.length);
+console.log("total line count = ", GCode.lineCount);
+console.log("estimated layer count = ",GCode.zmoves);

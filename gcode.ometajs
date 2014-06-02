@@ -1,71 +1,68 @@
 export ometa GCode {
     toEOL     = (~(end | '\n') char)*:s  -> s.join(""),
-    comment   = space* fromTo(';','\n'):com -> console.log("comment", com.trim()),
+    comment   = space* fromTo(';','\n'):com -> this.logComment(com.trim),
     flot      = <('-'|'+')? digit+ ('.' digit+)?>:f -> f,
     axiscoord = ("X" | "Y" | "Z" | "F" | "E" | "I" | "J"):l flot:f -> [l,f],
 
     temp      = "S" flot:val            -> val,
     tool      = "T" digit:val           -> val,
-    speed     = "S" digit+:val          -> val,
+    speed     = "S" digit+:val          -> val.join(""),
 
-    code      = "M117" toEOL:mess       ->console.log("display LCD message",mess),
-    code      = "G0":c (axiscoord)+:ac  -> console.log("rapid move",c,ac),
-    code      = "G1":c (axiscoord)+:ac  -> console.log("controlled move",c,ac),
+    code      = "G0":c (axiscoord)+:ac  -> this.logRapidMove(c,ac),
+    code      = "G1":c (axiscoord)+:ac  -> this.logControlledMove(c,ac), //console.log("controlled move",c,ac),
     code      = "G3":c (axiscoord)+:ac  -> console.log("controlled move arc counter clockwise",ac),
-    code      = "G17":c                 -> console.log("unknown",c),
     code      = "G20":c                 -> console.log("set units to inches",c),
     code      = "G21":c                 -> console.log("set units to mm",c),
     code      = "G28":c (axiscoord)+:ac -> console.log("move to origin",ac),
-    code      = "G40":u                 -> console.log("unknown, Cutter (dia.or rad.) compensation off?",u),
-    code      = "G54":u                 -> console.log("unknown, work coord offset?",u),
-    code      = "G64":u                 -> console.log("unknown, Exact stop mode off?",u),
-    code      = "G90":c -> console.log("set to absolute positioning",c),
-    code      = "G91":c -> console.log("set to relative positioning",c),
+    code      = "G90":c -> console.log("set to absolute positioning"),
+    code      = "G91":c -> console.log("set to relative positioning"),
     code      = "G92":c (axiscoord)+:ac -> console.log("set new zeropoint",ac),
-    code      = "G94":u -> console.log("unknown, feed rate?",u),
 
     code      = "M3":u "S" digit+:speed -> console.log("spindle on clockwise, speed =",speed),
     code      = "M5"                    -> console.log("stop the spindle"),
-    code      = "M109" tool:tool temp:temp -> console.log("set tool",tool,'to temp',temp,'C and wait'),
+    code      = "M109" tool:t temp:temp -> console.log("set tool",t,'to temp',temp,'C and wait'),
     code      = "M30"                   -> console.log("end of program"),
     code      = "M82"                   -> console.log("set extruder to absolute mode"),
     code      = "M84"                   -> console.log("steppers off"),
-    code      = "M104" speed:speed      -> "exturder heater off",
-    code      = "M140" speed:speed      -> "heated bed off",
+    code      = "M104" speed:speed      -> console.log("exturder heater off"),
+    code      = "M140" speed:speed      -> console.log("heated bed off"),
     code      = "M106" speed:speed      -> console.log("fan on",speed),
     code      = "M107"                  -> console.log("fan off"),
+    code      = "M117" toEOL:mess       -> this.logDisplayLCDMessage(mess),
     code      = tool:tool               -> console.log("set tool to",tool),
 
-    elem      = code:c,
-    EOL       = ('\r' '\n' | '\r' | '\n') -> console.log("EOL"),
-    line      = comment,
-    line      = elem comment            -> printLineNumber(),
-    line      = elem EOL                -> printLineNumber(),
+    EOL       = ('\r' '\n' | '\r' | '\n'),
+    line      = comment | code comment | code EOL -> this.logLineNumber(),
     start     = line+ anything*:x -> console.log("complete",x)
 }
 
-var lineCount = 0;
-function printLineNumber() {
-    console.log("line count = ",lineCount);
-    lineCount++;
+GCode.lineCount = 0;
+GCode.zmoves = 0;
+
+GCode.logComment = function(comment) { }
+GCode.logLineNumber = function() { GCode.lineCount++; }
+
+GCode.logDisplayLCDMessage = function(message) { }
+GCode.logControlledMove = function(c,ac) {
+    ac.forEach(function(axis) {
+        if(axis[0] == 'Z') {
+            GCode.logMoveZ(axis[1]);
+        }
+    });
+}
+GCode.logRapidMove = function(c,ac) {
+    ac.forEach(function(axis) {
+        if(axis[0] == 'Z') {
+            GCode.logMoveZ(axis[1]);
+        }
+    });
 }
 
+GCode.logMoveZ = function(val) { this.zmoves++; }
 
 console.log("doing some tests");
-//GCode.matchAll('G17 G20 G90 G94 G54\n','start')
-//G17 G20 G90 G94 G54
-//GCode.matchAll('G0 Z0.25\nG17\nG21\n','start')
-//GCode.matchAll('G17\nG21\n','start')
-//GCode.matchAll('G21','start')
-//G0 Z0.25
 
-/*
-GCode.matchAll('G21\nG91\nG1 X200 F3000\nG1 Y200 F3000\n'
-  +'G1 X-82 Y-76 F3000\nG1 Z-200 F500\nG1 Z5 F500\nG1 Z-10 F250\n'
-  +'G90\nG92 X0 Y0 Z0 E0\n'
-  ,'start');
 
-*/
 /*
 
 notes:
