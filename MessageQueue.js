@@ -12,10 +12,11 @@ exports.MessageQueue = {
         this.mess += m;
         //console.log(this.mess);
         var command = this.cbqueue.shift();
-        //console.log("done with command",command.cmd);
+        console.log("done with command",command.cmd);
         command.cb(this.mess);
         this.mess = "";
         this.queueWaiting = false;
+        this.broadcast({type:'okay',command:command.cmd});
     },
     sendRequest:function(cmd,cb) {
         this.cbqueue.push({
@@ -90,13 +91,15 @@ exports.MessageQueue = {
                 var lines = str.split("\n");
                 lines.forEach(function(line) {
                     //console.log("line = -",line,"-");
-                    if(line == 'ok') { console.log("==== ok ===="); }
+                    if(line == 'ok') {
+                        console.log("==== ok ====");
+                    }
                     if(line == "" || line == "\n" || line == "  ") {
                         return;
                     }
                     if(line[0] == 'T' && line[1] == ':') {
                         var temp = line.match(/T:(\d+\.\d+)/);
-                        //console.log("temp: ",temp[1]);
+                        console.log("temp: ",temp[1]);
                         self.broadcast({
                             type:"temp",
                             value:temp[1],

@@ -1,42 +1,3 @@
-
-/*
-this is a test of the mergency gcode system
-
-we want to open a serial port
-send the info command
-with the proper generated checksum
-get the response
-print it to the console
-try to parse it
-then exit
-
-
-
-test 2
-
-send version request, wait for response and print it
-send eeprom request, wait for response and print it
-request temperature, wait for response and print it
-send move to X=0
-exit
-
-
-test 3
-simple express based webserver which will
-get current status through a websocket every second {
-    temp
-    x/y/z
-    print in progress?
-    firmware info
-    eeprom info
-}
-
-start print with foo.gcode file, already on disk
-
-
-
-*/
-
 // ========= GLOBALS
 var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
 var outpath = 'foo.gcode';
@@ -45,23 +6,13 @@ var STATUS = {
     file:null,
     state:'standby',
     gcodefile:null,
+    ctemp:0,
+    ttemp:0,
+    totallines:0,
+    linesleft:0,
 }
 
-var printqueue = [
-/*
-    {
-        name:'foo1.stl',
-        state:'printing',
-        eta_sec:60*60*3,
-        id:'12341',
-    },
-    {
-        name:'foo2.stl',
-        state:'waiting',
-        id:'12342',
-    }
-    */
-];
+var printqueue = [];
 
 
 
@@ -113,6 +64,16 @@ console.log("started websocket client on port ",4202);
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
 
 MessageQueue.broadcast = function(mess) {
+    if(mess.type == 'temp') {
+        STATUS.ctemp = parseFloat(mess.value);
+        mess.target = STATUS.ttemp;
+    }
+    if(mess.type == 'okay') {
+        console.log("we can decrement number of commands now");
+        STATUS.linesleft--;
+        mess.totallines = STATUS.totallines;
+        mess.linesleft = STATUS.linesleft;
+    }
     wslisteners.forEach(function(conn) {
         if(!conn.readyState) return;
         conn.sendText(JSON.stringify(mess));
@@ -135,6 +96,8 @@ function writeFile(gcodefile) {
     var gcode = fs.readFileSync(gcodefile);
     var lines = gcode.toString().split("\n");
     console.log("gcode line count ",lines.length);
+    STATUS.totallines = lines.length;
+    STATUS.linesleft  = lines.length;
     MessageQueue.sendCommands(lines);
 }
 
@@ -176,6 +139,7 @@ Printer = {
             if(temp) {
                 console.log("got temp: ",temp[1]);
                 cb(temp[1]);
+                STATUS.ctemp = parseFloat(temp[1]);
             }  else {
                 console.log("getting temp failed for some reason");
                 cb(-1);
@@ -212,6 +176,8 @@ Printer = {
     },
     setTemp:function(temp, cb) {
         setState('heating');
+        console.log("moving to the target temp of ", temp);
+        STATUS.ttemp = parseFloat(temp);
         MessageQueue.sendRequest('M109 S'+temp,function() {
             setState('standby');
             cb(temp);

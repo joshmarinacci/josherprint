@@ -350,6 +350,7 @@
                         <div class='col-xs-12'>
                             <select id='manual-temp' class='form-control'>
                                 <option value='30'>30 C</option>
+                                <option value='50'>50 C</option>
                                 <option value='190'>190 C</option>
                                 <option value='195'>195 C</option>
                                 <option value='200'>200 C</option>
@@ -410,7 +411,7 @@
     <script src="js/bootstrap.min.js"></script>
 
 <script type='text/javascript'>
-var LIVE = false;
+var LIVE = true;
 
 function toggle(id) {
     return function(e) {
@@ -434,6 +435,22 @@ function updateStatus() {
     $("#manual-status-z").text(STATUS.z+'mm');
     $("#manual-status-temp").text(STATUS.temp+"C");
     $(".sidebar-status-temp").text(STATUS.temp+"C");
+
+    var per = STATUS.temp/STATUS.temptarget;
+    var diff = Math.abs(STATUS.temptarget - STATUS.temp);
+    //console.log("per = ",per,1.0-(diff/200));
+    var pper = 1.0-(diff/200);
+    var tempper = (pper*100).toFixed(1) + "%";
+    $("#print-current .temp-bar").css('width',tempper);
+    $("#print-current .temp-bar").text(tempper);
+}
+
+function updateProgress(mess) {
+    var percent = parseFloat(mess.linesleft)/parseFloat(mess.totallines) * 100.0;
+    var printper = (100-percent).toFixed(1)+"%";
+    console.log("per = ",printper);
+    $("#print-current .print-bar").css('width',printper);
+    $("#print-current .print-bar").text(printper);
 }
 
 function move(name,val) {
@@ -464,9 +481,17 @@ var server = {
         monitor.onmessage = function(e) {
             var mess = JSON.parse(e.data);
             if(mess.type == 'temp') {
+                //console.log(mess);
                 STATUS.temp = parseFloat(mess.value);
+                STATUS.temptarget = parseFloat(mess.target);
                 updateStatus();
                 return;
+            }
+            if(mess.type == 'okay') {
+                console.log(" a command finished.", mess.totallines, mess.linesleft);
+                if(mess.totallines && mess.linesleft) {
+                    updateProgress(mess);
+                }
             }
             console.log("got a message",mess);
             if(mess.type == 'state') {
