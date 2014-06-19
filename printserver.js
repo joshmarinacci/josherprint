@@ -257,7 +257,7 @@ function startServer(cb) {
         slice(item.file,item.gcodefile,function() {
             console.log("done with slicing");
             Printer.goHome(function() {
-                Printer.setTemp(195, function(temp) {
+                Printer.setTemp(200, function(temp) {
                     setState('standby');
                     console.log("reached target temp",temp);
                     console.log('starting to print');
