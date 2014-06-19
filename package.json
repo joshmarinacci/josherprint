@@ -8,6 +8,7 @@
     "formidable": "^1.0.14",
     "serialport": "^1.4.0",
     "ometa-js": "^1.3.2",
-    "nodejs-websocket": "^0.1.5"
+    "nodejs-websocket": "^0.1.5",
+    "cors": "^2.3.1"
   }
 }
