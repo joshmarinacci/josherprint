@@ -41,6 +41,9 @@
 
 
 
+        .progress-bar {
+            color: black;
+        }
 
         /* == start file upload stuff */
         .btn-file {
@@ -140,7 +143,7 @@
             </button>
             <span class="navbar-brand">OctoPlay</span>
             <p class='navbar-text'>
-                <b class='sidebar-status-temp'>-99C</b> <b class='sidebar-status-state label label-default'>standby</b>
+                <b class='status-temp'>-99C</b> <b class='status-text label label-default'>standby</b>
             </p>
 
         </div>
@@ -167,16 +170,6 @@
 
     <div class='row'>
 
-<!-- ========= SIDEBAR =========== -->
-<!--
-<div class='col-md-4'>
-    <div class='panel panel-default'>
-        <p>current temp: <b class='sidebar-status-temp'>-99C</b></p>
-        <p>state: <b class='sidebar-status-state'>standby</b></p>
-    </div>
-</div>
--->
-
         <div class='col-md-8'>
 
 <div class='row'>
@@ -185,18 +178,10 @@
     <li class='list-group-item'>
         <button id='cancel-print' class='btn btn-danger pull-right' disabled>Cancel</button>
         <button id='pause-print' class='btn btn-primary pull-right' disabled>Pause</button>
-        <span class='label label-primary state'>foo</span><br/>
+        <span class='label label-primary status-text'>foo</span><br/>
         filename: <b class='filename'>Awesome.stl</b><br/>
-        time left: <b class='timeleft'>8hrs 2min</b><br/>
-
-        <div class='row'>
-            <div class='col-xs-3'>Temp:</div>
-            <div class='col-xs-9'>
-                <div class='progress'>
-                    <div class='progress-bar temp-bar progress-bar-danger' role='progressbar' style='width:0%;'>0%</div>
-                </div>
-            </div>
-        </div>
+        time left: <b class='printTimeLeft'>8hrs 2min</b><br/>
+        time so far: <b class='printTime'>8hrs 2min</b><br/>
 
         <div class='row'>
             <div class='col-xs-3'>Complete:</div>
@@ -204,6 +189,39 @@
                 <div class='progress'>
                     <div class='progress-bar print-bar' role='progressbar' style='width:0%;'>0%</div>
                 </div>
+            </div>
+        </div>
+
+
+        <div class='row'>
+            <div class='col-xs-12'>
+                <a data-toggle="collapse" href="#tweakpanel" class='btn btn-default'>tweaks
+                     <span class='caret'></span></a>
+            </div>
+        </div>
+        <div class='row'>
+            <div class='col-xs-2'>
+            </div>
+            <div class='col-xs-10'>
+                <div id="tweakpanel" class="panel-collapse collapse">
+                    <div class='row'>
+                        <div class='col-xs-12'>
+                            <b>speed</b>
+                            <button class='btn btn-default'>slower</button>
+                            <button class='btn btn-default'>faster</button>
+                            <b>1.0</b>
+                        </div>
+                    </div>
+                    <div class='row'>
+                        <div class='col-xs-12'>
+                            <b>extrusion</b>
+                            <button class='btn btn-default'>less</button>
+                            <button class='btn btn-default'>more</button>
+                            <b>1.0</b>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </li>
@@ -344,6 +362,16 @@
                     </div>
 
                     <div class='row'>
+                        <div class='col-xs-12'><b>Extruder</b></div>
+                    </div>
+                    <div class='row'>
+                        <div class='col-xs-12'>
+                            <button class='btn btn-default' id='manual-upe'><span class='glyphicon glyphicon-arrow-up'></span></button>
+                            <button class='btn btn-default' id='manual-downe'><span class='glyphicon glyphicon-arrow-down'></span></button>
+                        </div>
+                    </div>
+
+                    <div class='row'>
                         <div class='col-xs-12'><b>Extruder Temperature</b></div>
                     </div>
                     <div class='row'>
@@ -421,13 +449,6 @@ function toggle(id) {
     }
 }
 
-var STATUS = {
-    x:-1,
-    y:-1,
-    z:-1,
-    temp:-1,
-    file:"foo.stl",
-}
 
 function updateStatus() {
     $("#manual-status-x").text(STATUS.x+'mm');
@@ -453,19 +474,36 @@ function updateProgress(mess) {
     $("#print-current .print-bar").text(printper);
 }
 
+var BASEURL = "http://localhost:3589/api";
+
 function move(name,val) {
-    var args = {};
+    var args = {
+        command:'jog',
+    };
     args[name] = val;
-    $.post('http://localhost:3589/move',args, function(result, status) {
+    $.post(BASEURL+'/printer/printhead',args, function(result, status) {
         STATUS[name] = result[name];
         updateStatus();
     });
 }
 
+function extrude(amount) {
+    $.post(BASEURL+'/printer/tool'
+        ,{ command:'extrude', amount: amount}
+        ,function(res,status) {
+            console.log(res,status);
+        });
+}
+
+
 
 var server = {
-
+    state: {
+        text:'standby',
+    },
     setup: function() {
+        console.log("doing setup");
+        var self = this;
         //===== websocket monitoring
         var wsurl = "ws:localhost:4202";
         var monitor = new WebSocket(wsurl);
@@ -480,43 +518,40 @@ var server = {
         }
         monitor.onmessage = function(e) {
             var mess = JSON.parse(e.data);
-            if(mess.type == 'temp') {
-                //console.log(mess);
-                STATUS.temp = parseFloat(mess.value);
-                STATUS.temptarget = parseFloat(mess.target);
-                updateStatus();
-                return;
-            }
-            if(mess.type == 'okay') {
-                console.log(" a command finished.", mess.totallines, mess.linesleft);
-                if(mess.totallines && mess.linesleft) {
-                    updateProgress(mess);
-                }
-            }
-            console.log("got a message",mess);
-            if(mess.type == 'state') {
-                $(".sidebar-status-state").text(mess.value);
-                $("#print-current .state").text(mess.value);
-            }
+            self.processUpdate(mess.current);
         }
-
-        $("#print-current .state").text('standby');
-        $("#print-current .filename").text('');
-        $("#print-current .timeleft").text('');
-        $("#print-current .complete").text('');
-
     },
+
+    processUpdate: function(evt) {
+        //console.log("got a message",evt);
+        if(evt.state) {
+            this.state.text = evt.state.text;
+            $(".status-text").text(this.state.text);
+        }
+        if(evt.progress) {
+            var txt = (evt.progress.completion*100)+"%";
+            $("#print-current .print-bar").css('width', txt);
+            $("#print-current .print-bar").text((evt.progress.completion*100)+"%");
+            $(".printTimeLeft").text(evt.progress.printTimeLeft+"min");
+            $(".printTime").text(evt.progress.printTime+"min");
+        }
+    },
+
     moveLeft:  function() { move('x',STATUS.x-5); },
     moveRight: function() { move('x',STATUS.x+5); },
     moveUp:    function() { move('y',STATUS.y+5); },
     moveDown:  function() { move('y',STATUS.y-5); },
     moveUpZ:   function() { move('z',STATUS.z+5); },
     moveDownZ: function() { move('z',STATUS.z-5); },
+    moveUpE:   function() { extrude(+5); },
+    moveDownE: function() { extrude(-5); },
     moveHome:  function() {
-        var args = {};
-        $.post('http://localhost:3589/home',args, function(result, status) {
-            console.log("result = ",result,status);
-            server.getPrinterStatus();
+        $.post(BASEURL+'/printer/printhead',{
+            command:'home',
+            axes:['x','y','z']
+        }, function(result, status) {
+            console.log("moved home = ",result,status);
+            //server.getPrinterStatus();
         });
     },
     getPrinterStatus: function() {
@@ -530,10 +565,16 @@ var server = {
         });
     },
     setTargetTemp: function(temp) {
-        var args = { temp: temp };
-        $.post('http://localhost:3589/temp',args, function(result, status) {
-            console.log("result = ",result,status);
-        });
+        $.post(BASEURL+'/printer/tool'
+            ,{
+                command:'target',
+                targets: {
+                    tool0: temp,
+                }
+            }
+            , function(result, status) {
+                console.log("result = ",result,status);
+            });
     },
     addToQueue: function() {
         var form = document.getElementById('add-queue-form');
@@ -561,179 +602,39 @@ var server = {
     },
     printNext: function() {
         console.log("printing next thing in the queue");
-        $.post("http://localhost:3589/print", function(result,status) {
+        $.post(BASEURL+'/job', { command: 'start' }, function(result,status) {
             console.log("requested the first thing in the queue to be printed",result);
-            updateCurrentStatus(result.item);
-            server.getPrintQueue();
+            $("#pause-print").removeAttr('disabled');
+            //server.currentprint.state = 'printing';
+            //updateCurrentStatus(result.item);
+            //server.getPrintQueue();
         });
-    }
-
-}
-
-var fakeServer = {
-
-    current_print: {
-        name:'active.stl',
-        id:'blah',
-        state:'waiting',
-        eta:'1hr 30min',
-        percent:50,
     },
-
-    print_queue: [
-        {
-            name:'robot.stl',
-            id:'foo',
-            state:'printing',
-            eta:'1hr 30min',
-        },
-        {
-            name:'plate.stl',
-            id:'plate',
-            state:'waiting',
-            eta:'8hr 16min',
-        },
-    ],
-
-    setup: function() {
-        $("#print-current .state").text('standby');
-        $("#print-current .filename").text('');
-        $("#print-current .timeleft").text('');
-        $("#print-current .complete").text('');
-    },
-
-    moveLeft:     function() { STATUS.x -= 5; updateStatus(); },
-    moveRight:    function() { STATUS.x += 5; updateStatus(); },
-    moveUp:       function() { STATUS.y += 5; updateStatus(); },
-    moveDown:     function() { STATUS.y -= 5; updateStatus(); },
-    moveDownZ:    function() { STATUS.z -= 5; updateStatus(); },
-    moveUpZ:      function() { STATUS.z += 5; updateStatus(); },
-    moveHome:     function() {
-        STATUS.x = 0;
-        STATUS.y = 0;
-        STATUS.z = 0;
-        updateStatus();
-    },
-    getPrinterStatus: function() {
-        //no-op
-    },
-    setTargetTemp: function(temp) {
-        var id = setInterval(function() {
-            if(Math.abs(STATUS.temp-temp) < 10) {
-                STATUS.temp = temp;
-                updateStatus();
-                clearInterval(id);
-                return;
-            }
-            if(STATUS.temp > temp) {
-                STATUS.temp -= 10;
-            } else {
-                STATUS.temp += 10;
-            }
-            updateStatus();
-        },500);
-    },
-    addToQueue: function() {
-        console.log("adding to queue");
-        $("#add-queue-dialog").modal('hide');
-        server.print_queue.push({
-            name:'foo',
-            id:'foo',
-            state:'slicing',
-            eta:10*10*60,
+    pausePrint: function() {
+        $.post(BASEURL+'/job', { command: 'pause' }, function(result,status) {
+            console.log("requested the job be paused or unpaused",result);
+            //updateCurrentStatus(result.item);
+            //server.getPrintQueue();
         });
-        server.getPrintQueue();
+
     },
-    getPrintQueue: function() {
-        var out = Mustache.render($("#print-queue-item-template").text(), {queue:server.print_queue});
-        $(".print-queue").empty().append(out);
+    cancelPrint: function() {
+        $.post(BASEURL+'/job', { command: 'cancel' }, function(result,status) {
+            console.log("requested the print be canceled",result);
+            //updateCurrentStatus(result.item);
+            //server.getPrintQueue();
+        });
+
     },
-
-    printNext: function() {
-        console.log("pretending to print the next one");
-        server.current_print = server.print_queue.shift();
-        $("#pause-print").removeAttr('disabled');
-//        <button id='pause-print' class='btn btn-danger pull-right' disabled>Cancel</button>
-//        <button id='cancel-print' class='btn btn-primary pull-right' disabled>Pause</button>
-
-        server.current_print.percent = 0;
-        server.getPrintQueue();
-        setTimeout(simulateHeating,1000);
-    },
-
-}
-
-$("#pause-print").click(function() {
-    if(server.current_print.state == 'printing') {
-        server.current_print.state = 'paused';
-        $("#pause-print").text("resume");
-        $("#cancel-print").removeAttr('disabled');
-    } else {
-        server.current_print.state = 'printing';
-        $("#pause-print").text("pause");
-        $("#cancel-print").attr('disabled','disabled');
-    }
-})
-
-function simulateHeating() {
-    server.current_print.state = 'heating';
-    STATUS.temp = 25;
-    updateCurrentStatus(server.current_print);
-
-    var id = setInterval(function() {
-        STATUS.temp += 6.7;
-        updateCurrentStatus(server.current_print);
-        if(STATUS.temp >= 195) {
-            clearInterval(id);
-            simulatePrinting();
-        }
-    },250);
-}
-
-function simulatePrinting() {
-    server.current_print.state = 'printing';
-    STATUS.temp = 195;
-    updateCurrentStatus(server.current_print);
-    var id = setInterval(function() {
-        server.current_print.percent +=5;
-        updateCurrentStatus(server.current_print);
-        if(server.current_print.percent >= 100) {
-            clearInterval(id);
-            server.current_print.state = 'done!';
-            $("#pause-print").text('reprint');
-            $("#cancel-print").attr('disabled','disabled');
-            updateCurrentStatus(server.current_print);
-        }
-    },250);
-}
-
-function updateCurrentStatus(current) {
-    $("#print-current .state")   .text(current.state);
-    $("#print-current .filename").text(current.name);
-    $("#print-current .timeleft").text(current.eta);
-    $("#print-current .complete").text(current.percent+"%");
-
-    var printper = current.percent+"%";
-    $("#print-current .print-bar").css('width',printper);
-    $("#print-current .print-bar").text(printper);
-    var tempper = ((STATUS.temp/195.0)*100).toFixed(0) + "%";
-    $("#print-current .temp-bar").css('width',tempper);
-    $("#print-current .temp-bar").text(tempper);
-    $(".sidebar-status-state").text(current.state);
-    $(".sidebar-status-temp").text(STATUS.temp.toFixed(2)+"C");
 }
 
 
 
 $(document).ready(function() {
-    if(!LIVE) {
-        server = fakeServer;
-    }
 
     $(".mode-panel").hide();
     $("#main-panel").show();
 
-    //$("#start-print").click(startHeat);
     $("#login-menu").click(toggle('#login-panel'));
     $("#about-menu").click(toggle('#about-panel'));
     $("#manual-menu").click(toggle('#manual-panel'));
@@ -741,9 +642,6 @@ $(document).ready(function() {
     $("#camera-menu").click(toggle('#camera-panel'));
     $("#home-menu").click(toggle('#main-panel'));
 
-    $("#print-next").click(server.printNext);
-
-    //fillLayers();
 
     $("#manual-left").click(server.moveLeft);
     $("#manual-right").click(server.moveRight);
@@ -751,6 +649,8 @@ $(document).ready(function() {
     $("#manual-down").click(server.moveDown);
     $("#manual-upz").click(server.moveUpZ);
     $("#manual-downz").click(server.moveDownZ);
+    $("#manual-upe").click(server.moveUpE);
+    $("#manual-downe").click(server.moveDownE);
     $("#manual-home").click(server.moveHome);
     $("#manual-temp").change(function() { server.setTargetTemp(parseFloat($(this).val()));  });
 
@@ -769,16 +669,31 @@ $(document).ready(function() {
         input.val(log);
     });
 
+    // ====== queue and printing stuff
     $("#add-to-queue").click(server.addToQueue);
+    $("#print-next").click(server.printNext);
 
-    if(LIVE) {
+    $("#pause-print").click(function() {
+        if(server.currentprint.state == 'printing') {
+            server.currentprint.state = 'paused';
+            $("#pause-print").text("resume");
+            $("#cancel-print").removeAttr('disabled');
+            server.pausePrint();
+        } else {
+            server.currentprint.state = 'printing';
+            $("#pause-print").text("pause");
+            $("#cancel-print").attr('disabled','disabled');
+            server.pausePrint();
+        }
+    });
 
-    }
+    $("#cancel-print").click(function() {
+        server.cancelPrint();
+        $("#cancel-print").attr('disabled','disabled');
+        $("#pause-print").attr('disabled','disabled');
+    });
 
     server.setup();
-    server.getPrinterStatus();
-    server.getPrintQueue();
-
 });
 
 
