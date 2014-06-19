@@ -3,7 +3,7 @@ var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
 var outpath = 'foo.gcode';
 
 var STATUS = {
-    file:null,
+    filen:null,
     state:'standby',
     gcodefile:null,
     ctemp:0,
@@ -15,7 +15,6 @@ var STATUS = {
 var printqueue = [];
 
 
-
 // imports
 var express = require('express');
 var bodyParser = require('body-parser');
@@ -23,6 +22,7 @@ var formidable = require('formidable');
 var child_process = require('child_process');
 var fs = require('fs');
 var websocket = require('nodejs-websocket');
+var PrinterObj = require('./printer').Printer;
 
 // ==== configure the webserver
 var app = express();
@@ -36,13 +36,6 @@ app.use(function(req, res, next){
     });
     next();
 });
-
-
-/*
-SP.list(function(err,ports){
-    console.log("ports",ports);
-});
-*/
 
 
 
@@ -80,6 +73,7 @@ MessageQueue.broadcast = function(mess) {
     })
 }
 
+/*
 startServer(function() {
     MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
         console.log('sending a request');
@@ -88,6 +82,21 @@ startServer(function() {
             //writeFile(process.cwd()+"/toprint.gcode");
         });
     });
+});
+*/
+
+app.post("/api/printer/printhead",function(req,res) {
+    console.log("print head called");
+    res.end(JSON.stringify({status:'ok'}));
+    /*
+
+    res.send(JSON.stringify({foo:'bar'}));
+    res.end();
+    return;*/
+});
+
+var server = app.listen(3589,function() {
+    console.log('listening on port ', server.address().port);
 });
 
 
@@ -123,67 +132,8 @@ function slice(inpath, outpath,cb) {
     proc.stderr.pipe(process.stdout);
 }
 
-Printer = {
-    goHome: function(cb) {
-        setState('homing');
-        MessageQueue.sendRequest('G28',function() {
-            setState('standby');
-            if(cb) cb();
-        });
-    },
-    getTemp: function(cb) {
-        console.log("getTemp");
-        MessageQueue.sendRequest('M105',function(m) {
-            console.log("getting temp return ",m);
-            var temp = m.match(/T:(\d+\.\d+)/);
-            if(temp) {
-                console.log("got temp: ",temp[1]);
-                cb(temp[1]);
-                STATUS.ctemp = parseFloat(temp[1]);
-            }  else {
-                console.log("getting temp failed for some reason");
-                cb(-1);
-            }
-        });
-    },
-    getPositions: function(cb) {
-        console.log("getPositions");
-        MessageQueue.sendRequest('M114',function(mm) {
-            console.log("get positiosn returned",mm);
-            var pos = mm.toString().replace(/\n/g,'');
-            var matches = pos.match(/X:(\d+\.\d+)Y:(\d+\.\d+)Z:(\d+\.\d+)E:(\d+\.\d+)/);
-            if(!matches) {
-                cb({
-                    x:-1,
-                    y:-1,
-                    z:-1,
-                    e:-1,
-                });
-            } else {
-                cb({
-                    x:    parseFloat(matches[1]),
-                    y:    parseFloat(matches[2]),
-                    z:    parseFloat(matches[3]),
-                    e:    parseFloat(matches[4]),
-                });
-            }
-        });
-    },
-    move: function(axis, value, cb) {
-        var req = 'G0 '+axis.toUpperCase()+value;
-        console.log("move: ",req);
-        MessageQueue.sendRequest(req, function() { cb(value); });
-    },
-    setTemp:function(temp, cb) {
-        setState('heating');
-        console.log("moving to the target temp of ", temp);
-        STATUS.ttemp = parseFloat(temp);
-        MessageQueue.sendRequest('M109 S'+temp,function() {
-            setState('standby');
-            cb(temp);
-        });
-    }
-}
+
+var Printer = new PrinterObj(MessageQueue);
 
 
 function setState(state) {
@@ -198,55 +148,151 @@ function setState(state) {
 function startServer(cb) {
     console.log('starting webserver');
 
-    app.get("/status",function(req,res) {
+    app.get("/api/printer",function(req,res) {
+        console.log("here");
         Printer.getTemp(function(temp) {
             Printer.getPositions(function(pos) {
                 res.end(JSON.stringify({
-                    status:'pretty good',
-                    temp: parseFloat(temp),
-                    x:pos.x,
-                    y:pos.y,
-                    z:pos.z,
-                    e:pos.e,
+                    temperature: {
+                        tool0: {
+                            "actual":STATUS.ctemp,
+                            "target":STATUS.ttemp,
+                            "offset":0,
+                        }
+                    },
+                    position: {
+                        x:pos.x,
+                        y:pos.y,
+                        z:pos.z,
+                        e:pos.e,
+                    },
+                    state: {
+                        text: STATUS.state,
+                        flags: {
+                            "operational":true,
+                            "paused":false,
+                            "printing":true,
+                            "sdReady":false,
+                            "error":false,
+                            "ready":true,
+                            "closedOrError":false,
+                        }
+                    },
                 }));
             });
         });
     });
 
-    app.post("/move",function(req,res) {
-        if(req.param('x')) {
-            Printer.move('x',parseFloat(req.param('x')), function(val) {
-                res.end(JSON.stringify({status:'ok',x:val}));
-            });
+    app.post("/api/printer/printhead",function(req,res) {
+        console.log("print head called");
+
+
+        res.send(JSON.stringify({foo:'bar'}));
+        res.end();
+        return;
+
+        if(cmd.command == 'jog') {
+            console.llg("doing jog");
+            if(cmd.x) {
+                Printer.move('x', parseFloat(cmd.x), function(val) {
+                    console.log("got called back");
+                    res.json(JSON.stringify({status:'ok',x:val}));
+                });
+            }
+            if(cmd.y) {
+                Printer.move('y', parseFloat(cmd.x), function(val) {
+                    res.end(JSON.stringify({status:'ok',y:val}));
+                });
+            }
+            if(cmd.z) {
+                Printer.move('z', parseFloat(cmd.z), function(val) {
+                    res.end(JSON.stringify({status:'ok',z:val}));
+                });
+            }
             return;
         }
-        if(req.param('y')) {
-            Printer.move('y',parseFloat(req.param('y')), function(val) {
-                res.end(JSON.stringify({status:'ok',y:val}));
+
+        if(cmd.command == 'home') {
+            console.log('doing home');
+            /*
+            Printer.goHome(cmd.axes,function() {
+                console.log("got the callback");
+                res.json({status:'ok'});
+                res.end();
             });
+            */
+            res.json({status:'ok'});
+            //res.end();
             return;
         }
-        if(req.param('z')) {
-            Printer.move('z',parseFloat(req.param('z')), function(val) {
-                res.end(JSON.stringify({status:'ok',z:val}));
-            });
-            return;
-        }
+
+        console.log('doing other');
         res.end(JSON.stringify({status:'failure', message:'you must supply at least z, y, or z'}));
     });
 
-    app.post("/home",function(req,res) {
-        Printer.goHome(function() {
-            res.end(JSON.stringify({status:'ok'}));
-        });
+    app.post("/api/printer/tool",function(req,res) {
+        var cmd = req.body;
+        if(cmd.command == 'target') {
+            console.log('setting temp to ', cmd.targets.tool0);
+            Printer.setTemp(cmd.targets.tool0, function() {
+                res.send(JSON.stringify({status:'ok'}));
+                res.end();
+            });
+        }
+        if(cmd.command == 'extrude') {
+            Printer.extrude(cmd.amount,function() {
+                res.end(JSON.stringify({status:'ok'}));
+            })
+        }
     });
 
-    app.post("/temp",function(req,res) {
-        Printer.setTemp(parseFloat(req.param('temp')), function(temp) {
-            res.end(JSON.stringify({status:'ok'}));
-        });
+    app.post("/api/job", function(req, res) {
+        console.log('doing a job request');
+        var cmd = {
+            'command':'start',
+        }
+        if(cmd.command == 'start') {
+            console.log("start the current job");
+        }
+        if(cmd.command == 'restart') {
+
+        }
+        if(cmd.command == 'pause') {
+
+        }
+        if(cmd.command == 'cancel') {
+
+        }
     });
 
+    app.get("/api/job", function(req,res) {
+        res.end(
+            JSON.stringify({
+                "job": {
+                    "file":{
+                        name:"foo.stl",
+                        origin:'local',
+                        size:146780, //in bytes
+                        date: 1378847754, //time the job was started?
+                    },
+                    estimatedPrintTime: 8811,
+                    filament: {
+                        length: 810,
+                        volume: 5.36,
+                    },
+
+                },
+                progress: {
+                    completion: 0.22, //percent complete
+                    filepos: 337842, //??
+                    printTime: 276, //in minutes?
+                    printTimeLeft: 912, // in minutes?
+                }
+            })
+        );
+    });
+
+    /*
     app.post("/print",function(req,res){
         var item = printqueue.shift();
         item.percent = 0;
@@ -296,10 +342,8 @@ function startServer(cb) {
         }
         res.end(JSON.stringify(queueinfo));
     })
+    */
 
-    var server = app.listen(3589,function() {
-        console.log('listening on port ', server.address().port);
-    });
 
     if(cb) cb();
 
