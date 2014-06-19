@@ -366,8 +366,8 @@
                     </div>
                     <div class='row'>
                         <div class='col-xs-12'>
-                            <button class='btn btn-default' id='manual-upe'><span class='glyphicon glyphicon-arrow-up'></span></button>
                             <button class='btn btn-default' id='manual-downe'><span class='glyphicon glyphicon-arrow-down'></span></button>
+                            <button class='btn btn-default' id='manual-upe'><span class='glyphicon glyphicon-arrow-up'></span></button>
                         </div>
                     </div>
 
@@ -408,7 +408,7 @@
                         <dt>x</dt><dd id='manual-status-x'>100mm</dd>
                         <dt>y</dt><dd id='manual-status-y'>100mm</dd>
                         <dt>z</dt><dd id='manual-status-z'>100mm</dd>
-                        <dt>temp</dt><dd id='manual-status-temp'>100C</dd>
+                        <dt>temp</dt><dd class='status-temp'>100C</dd>
                     </dl>
                 </div>
             </div>
@@ -482,8 +482,8 @@ function move(name,val) {
     };
     args[name] = val;
     $.post(BASEURL+'/printer/printhead',args, function(result, status) {
-        STATUS[name] = result[name];
-        updateStatus();
+        server.state[name] = result[name];
+        //updateStatus();
     });
 }
 
@@ -500,6 +500,15 @@ function extrude(amount) {
 var server = {
     state: {
         text:'standby',
+        x:0,
+        y:0,
+        z:0,
+        paused:false,
+        temp: {
+            actual:0,
+            offset:0,
+            target:-1,
+        }
     },
     setup: function() {
         console.log("doing setup");
@@ -520,13 +529,26 @@ var server = {
             var mess = JSON.parse(e.data);
             self.processUpdate(mess.current);
         }
+
+        $.get(BASEURL+"/printer",function(res) {
+            console.log('the printer state is = ',res);
+            $(".status-text").text(res.state.text);
+            $('.status-temp').text(res.temperature.tool0.actual);
+            if(res.state.flags.printing) {
+                $("#pause-print").removeAttr('disabled');
+            }
+        });
     },
 
     processUpdate: function(evt) {
-        //console.log("got a message",evt);
+        console.log("got a message",evt);
         if(evt.state) {
             this.state.text = evt.state.text;
             $(".status-text").text(this.state.text);
+        }
+        if(evt.temp) {
+            this.state.temp.actual = evt.temp.actual;
+            $(".status-temp").text(evt.temp.actual);
         }
         if(evt.progress) {
             var txt = (evt.progress.completion*100)+"%";
@@ -537,20 +559,23 @@ var server = {
         }
     },
 
-    moveLeft:  function() { move('x',STATUS.x-5); },
-    moveRight: function() { move('x',STATUS.x+5); },
-    moveUp:    function() { move('y',STATUS.y+5); },
-    moveDown:  function() { move('y',STATUS.y-5); },
-    moveUpZ:   function() { move('z',STATUS.z+5); },
-    moveDownZ: function() { move('z',STATUS.z-5); },
-    moveUpE:   function() { extrude(+5); },
-    moveDownE: function() { extrude(-5); },
+    moveLeft:  function() { move('x', server.state.x-5); },
+    moveRight: function() { move('x', server.state.x+5); },
+    moveUp:    function() { move('y', server.state.y+5); },
+    moveDown:  function() { move('y', server.state.y-5); },
+    moveUpZ:   function() { move('z', server.state.z+5); },
+    moveDownZ: function() { move('z', server.state.z-5); },
+    moveUpE:   function() { extrude(-5); },
+    moveDownE: function() { extrude(+5); },
     moveHome:  function() {
         $.post(BASEURL+'/printer/printhead',{
             command:'home',
             axes:['x','y','z']
         }, function(result, status) {
             console.log("moved home = ",result,status);
+            server.state.x = 0;
+            server.state.y = 0;
+            server.state.z = 0;
             //server.getPrinterStatus();
         });
     },
@@ -674,13 +699,13 @@ $(document).ready(function() {
     $("#print-next").click(server.printNext);
 
     $("#pause-print").click(function() {
-        if(server.currentprint.state == 'printing') {
-            server.currentprint.state = 'paused';
+        if(!server.state.paused) {
+            server.state.paused = true;
             $("#pause-print").text("resume");
             $("#cancel-print").removeAttr('disabled');
             server.pausePrint();
         } else {
-            server.currentprint.state = 'printing';
+            server.state.paused = false;
             $("#pause-print").text("pause");
             $("#cancel-print").attr('disabled','disabled');
             server.pausePrint();

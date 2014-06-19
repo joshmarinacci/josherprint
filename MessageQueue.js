@@ -4,6 +4,7 @@ exports.MessageQueue = {
     cbqueue:[],
     mess:"",
     queueWaiting:false,
+    paused:false,
     appendMessage: function(m) {
         this.mess += m;
         this.mess += '\n';
@@ -45,11 +46,22 @@ exports.MessageQueue = {
         return cmd+'*'+cs;
     },
 
+    pause: function() {
+        this.paused = true;
+    },
+    resume: function() {
+        this.paused = false;
+        var self = this;
+        setTimeout(function() {
+            self.checkQueue();
+        },0)
+    },
+
     checkQueue:function() {
         if(this.queueWaiting) {
             //console.log("waiting for the queue");
         } else {
-            if(this.cbqueue.length > 0) {
+            if(this.cbqueue.length > 0 && !this.paused) {
                 var command = this.cbqueue[0];
                 var cm = command.cmd;
                 //strip trailing comments

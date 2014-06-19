@@ -1,5 +1,13 @@
+var fs = require('fs');
+
 function Printer(MessageQueue) {
-    this.dummy = true;
+    this.dummy = false;
+    this.paused = false;
+    this.printing = false;
+    this.text = 'blah';
+    this.temp = -1;
+    this.totallines = 0;
+    this.linesleft = 0;
     this.goHome = function(axes,cb) {
         console.log('homing the axes',axes);
         //setState('homing');
@@ -77,8 +85,37 @@ function Printer(MessageQueue) {
 
     this.extrude = function(amt, cb) {
         console.log("extruding by ",amt);
-        cb(amt);
+        var self = this;
+        self.sendRequest('G92 E0', function() {
+            self.sendRequest('G1 F200 E'+amt, function() {
+                self.sendRequest('G92 E0', function() {
+                    cb(amt);
+                })
+            })
+        })
     }
+
+    this.writeFile = function(gcodefile) {
+        this.printing = true;
+        console.log("loading gcode file",gcodefile);
+        var gcode = fs.readFileSync(gcodefile);
+        var lines = gcode.toString().split("\n");
+        console.log("gcode line count ",lines.length);
+        this.totallines = lines.length;
+        this.linesleft = lines.length;
+        MessageQueue.sendCommands(lines);
+    }
+
+    this.pause = function(cb) {
+        if(this.paused) {
+            MessageQueue.resume();
+            this.paused = false;
+        } else {
+            MessageQueue.pause();
+            this.paused = true;
+        }
+    }
+
 }
 
 
