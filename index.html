@@ -538,6 +538,7 @@ var server = {
                 $("#pause-print").removeAttr('disabled');
             }
         });
+        server.getPrintQueue();
     },
 
     processUpdate: function(evt) {
@@ -551,9 +552,10 @@ var server = {
             $(".status-temp").text(evt.temp.actual);
         }
         if(evt.progress) {
-            var txt = (evt.progress.completion*100)+"%";
+            var txt = (evt.progress.completion*100).toFixed(1)+"%";
+
             $("#print-current .print-bar").css('width', txt);
-            $("#print-current .print-bar").text((evt.progress.completion*100)+"%");
+            $("#print-current .print-bar").text(txt);
             $(".printTimeLeft").text(evt.progress.printTimeLeft+"min");
             $(".printTime").text(evt.progress.printTime+"min");
         }
@@ -619,9 +621,8 @@ var server = {
 
     getPrintQueue: function() {
         $.get("http://localhost:3589/queue",function(result,status) {
-            console.log("got the print queue ",result.queue);
-            var out = Mustache.render($("#print-queue-item-template").text(), result);
-            console.log("rendered",out);
+            var res = JSON.parse(result);
+            var out = Mustache.render($("#print-queue-item-template").text(), res);
             $(".print-queue").empty().append(out);
         });
     },

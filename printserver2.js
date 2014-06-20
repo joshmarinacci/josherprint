@@ -1,7 +1,9 @@
 var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
 
+var fs = require('fs');
 var express = require('express');
 var bodyParser = require('body-parser');
+var formidable = require('formidable');
 var cors = require('cors');
 var Printer = require('./printer').Printer;
 var websocket = require('nodejs-websocket');
@@ -56,6 +58,7 @@ MessageQueue.broadcast = function(mess) {
 
 
 
+var printqueue = [];
 var wslisteners = [];
 // ==== set up websocket for realtime monitoring
 var ws = websocket.createServer(function(conn) {
@@ -142,17 +145,17 @@ app.post('/api/printer/tool',function(req,res) {
 app.post('/api/job', function(req,res) {
     console.log('job command is',req.body.command);
     if(req.body.command == 'start') {
-        var file = process.cwd()+'/octogon.stl';
-        console.log("printing ",file);
-        var gcodefile = process.cwd()+"/tmp/toprint.gcode";
-        //setState('slicing');
+        var item = printqueue.shift();
+        //var file = process.cwd()+'/octogon.stl';
+        console.log("printing ",item.file);
+        item.gcodefile = process.cwd()+"/tmp/toprint.gcode";
         printer.text = 'slicing';
-        slice(file,gcodefile,function() {
-            console.log("done with slicing to ", gcodefile);
+        slice(item.file, item.gcodefile,function() {
+            console.log("done with slicing to ", item.gcodefile);
             printer.text = 'homing';
             printer.goHome(['x','y','z'],function() {
                 printer.text = 'printing';
-                printer.writeFile(gcodefile);
+                printer.writeFile(item.gcodefile);
                 sendUpdate({state:{
                     text:printer.text,
                     flags:{ printing:printer.printing, }
@@ -212,6 +215,37 @@ app.post('/api/job', function(req,res) {
     }
     res.json({status:'ok'}).end();
 
+});
+
+
+app.get("/queue",function(req,res) {
+    console.log("queue = ",printqueue);
+    var queueinfo = {
+        status:"ok",
+        queue: printqueue,
+        id: "id"+Math.floor(Math.random()*100000)+"",
+    }
+    res.end(JSON.stringify(queueinfo));
+})
+app.post('/upload', function(req,res) {
+    var form = new formidable.IncomingForm();
+    form.parse(req, function(err, fields, files) {
+        console.log(err,fields,files);
+        var file = files.stlfile;
+        var newitem = {
+            file : process.cwd()+"/tmp/toslice"+Math.floor(Math.random()*10*1000)+".stl",
+            name: files.stlfile.name,
+            state: 'waiting',
+        }
+        fs.renameSync(file.path,newitem.file);
+        printqueue.push(newitem);
+        console.log("new file = ",newitem);
+        console.log("queue = ",printqueue);
+        res.end(JSON.stringify({
+            status:'ok',
+            item: newitem,
+        }));
+    });
 });
 
 var server = app.listen(3589,function() {
