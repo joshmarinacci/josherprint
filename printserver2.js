@@ -1,4 +1,5 @@
 var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
+var DEMO = true;
 
 var fs = require('fs');
 var express = require('express');
@@ -28,6 +29,9 @@ function sendUpdate(message) {
 
 var MessageQueue = require('./MessageQueue.js').MessageQueue;
 var printer = new Printer(MessageQueue);
+if(DEMO) {
+    printer.dummy = true;
+}
 MessageQueue.broadcast = function(mess) {
     console.log('printer queue reported',mess);
     if(mess.type == 'temp') {
@@ -139,7 +143,52 @@ app.post('/api/printer/tool',function(req,res) {
     }
 });
 
+var demoid = -1;
+var demostate = "";
+var democomplete = 0.0;
+var demotime = 0;
+var demototal = 10;
+function updateDemoPrint() {
+    console.log('updating');
+    if(demostate == 'printing') {
+        sendUpdate({progress:{
+            completion: democomplete,
+            printTime: demotime,
+            printTimeLeft:demototal-demotime,
+        }
+        });
+        democomplete += 0.1;
+        demotime += 1;
+        if(democomplete > 1.0) {
+            clearInterval(demoid);
+            sendUpdate({state:{text:'standby'}});
+            sendUpdate({
+                temp: {
+                    actual: parseFloat(23),
+                    target: -1,
+                    offset: 0,
+                }
+            });
 
+        }
+    }
+}
+
+function runDemoPrint() {
+    sendUpdate({state:{text:'heating'}});
+    sendUpdate({
+        temp: {
+            actual: parseFloat(195),
+            target: -1,
+            offset: 0,
+        }
+    });
+    setTimeout(function() {
+        sendUpdate({state:{text:'printing'}});
+        demostate = 'printing';
+        demoid = setInterval(updateDemoPrint,1000);
+    },1000);
+}
 
 //start, pause, resume, and cancel
 app.post('/api/job', function(req,res) {
@@ -150,12 +199,18 @@ app.post('/api/job', function(req,res) {
         console.log("printing ",item.file);
         item.gcodefile = process.cwd()+"/tmp/toprint.gcode";
         printer.text = 'slicing';
+        sendUpdate({state:{  text: 'slicing' }});
+
         slice(item.file, item.gcodefile,function() {
             console.log("done with slicing to ", item.gcodefile);
             printer.text = 'homing';
             printer.goHome(['x','y','z'],function() {
                 printer.text = 'printing';
-                printer.writeFile(item.gcodefile);
+                if(DEMO) {
+                    runDemoPrint();
+                } else {
+                    printer.writeFile(item.gcodefile);
+                }
                 sendUpdate({state:{
                     text:printer.text,
                     flags:{ printing:printer.printing, }
@@ -252,13 +307,15 @@ var server = app.listen(3589,function() {
     console.log('listening on port ', server.address().port);
 
 
-    MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
-        console.log('sending a request');
-        MessageQueue.sendRequest('M110',function(m) {
-            console.log("m = ",m);
-            //writeFile(process.cwd()+"/toprint.gcode");
+    if(!DEMO) {
+        MessageQueue.openSerial("/dev/cu.usbmodem12341",function() {
+            console.log('sending a request');
+            MessageQueue.sendRequest('M110',function(m) {
+                console.log("m = ",m);
+                //writeFile(process.cwd()+"/toprint.gcode");
+            });
         });
-    });
+    }
 
 });
 
