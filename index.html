@@ -206,17 +206,17 @@
                     <div class='row'>
                         <div class='col-xs-4'><b class='pull-right'>speed</b></div>
                         <div class='col-xs-8'>
-                            <button class='btn btn-default'><span class='glyphicon glyphicon-minus'></span></button>
-                            <b>1.0</b>
-                            <button class='btn btn-default'><span class='glyphicon glyphicon-plus'></span></button>
+                            <button id='tweak-speed-less' class='btn btn-default'><span class='glyphicon glyphicon-minus'></span></button>
+                            <b id='tweak-speed-factor'>1.0</b>
+                            <button id='tweak-speed-more' class='btn btn-default'><span class='glyphicon glyphicon-plus'></span></button>
                         </div>
                     </div>
                     <div class='row'>
                         <div class='col-xs-4'><b class='pull-right'>extrusion</b></div>
                         <div class='col-xs-8'>
-                            <button class='btn btn-default'><span class='glyphicon glyphicon-minus'></span></button>
-                            <b>1.0</b>
-                            <button class='btn btn-default'><span class='glyphicon glyphicon-plus'></span></button>
+                            <button id='tweak-extrusion-less' class='btn btn-default'><span class='glyphicon glyphicon-minus'></span></button>
+                            <b id='tweak-extrusion-factor'>1.0</b>
+                            <button id='tweak-extrusion-more' class='btn btn-default'><span class='glyphicon glyphicon-plus'></span></button>
                         </div>
                     </div>
                 </div>
@@ -514,7 +514,9 @@ var server = {
             actual:0,
             offset:0,
             target:-1,
-        }
+        },
+        extrusionFactor: 1.0,
+        speedFactor: 1.0,
     },
     setup: function() {
         console.log("doing setup");
@@ -672,6 +674,25 @@ var server = {
             console.log("requested the fan to go to 0%",result);
         });
     },
+
+    setSpeedFactor: function(factor) {
+        this.state.speedFactor = factor;
+        $.post(BASEURL+'/printer/printhead',{
+            command:'speedFactor',
+            value:factor,
+        }, function(result, status) {
+            console.log("set speed factor",result,status);
+        });
+    },
+    setExtrusionFactor: function(factor) {
+        this.state.extrusionFactor = factor;
+        $.post(BASEURL+'/printer/printhead',{
+            command:'extrusionFactor',
+            value:factor,
+        }, function(result, status) {
+            console.log("set extrusion factor",result,status);
+        });
+    },
 }
 
 
@@ -701,6 +722,22 @@ $(document).ready(function() {
     $("#manual-temp").change(function() { server.setTargetTemp(parseFloat($(this).val()));  });
     $("#manual-fan-on").click(server.fanOn);
     $("#manual-fan-off").click(server.fanOff);
+    $("#tweak-speed-less").click(function() {
+        server.setSpeedFactor(server.state.speedFactor-0.1);
+        $("#tweak-speed-factor").text(server.state.speedFactor.toFixed(1)+'');
+    });
+    $("#tweak-speed-more").click(function() {
+        server.setSpeedFactor(server.state.speedFactor+0.1);
+        $("#tweak-speed-factor").text(server.state.speedFactor.toFixed(1)+'');
+    });
+    $("#tweak-extrusion-less").click(function() {
+        server.setExtrusionFactor(server.state.extrusionFactor-0.1);
+        $("#tweak-extrusion-factor").text(server.state.extrusionFactor.toFixed(1)+'');
+    });
+    $("#tweak-extrusion-more").click(function() {
+        server.setExtrusionFactor(server.state.extrusionFactor+0.1);
+        $("#tweak-extrusion-factor").text(server.state.extrusionFactor.toFixed(1)+'');
+    });
 
     // ===== file upload stuff
     $(document).on('change', '.btn-file :file', function() {

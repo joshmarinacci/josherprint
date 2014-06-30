@@ -101,7 +101,7 @@ app.get('/api/printer', function(req,res) {
 });
 
 
-//home and jog
+//home and jog and extrusion factors
 app.post("/api/printer/printhead",function(req,res) {
     if(req.body.command == 'jog') {
         if(req.body.x) {
@@ -123,6 +123,19 @@ app.post("/api/printer/printhead",function(req,res) {
 
     if(req.body.command == 'home') {
         printer.goHome(req.body.axes,function() {
+            res.json({status:'ok'});
+        });
+    }
+
+    if(req.body.command == 'speedFactor') {
+        printer.setSpeedFactor(parseFloat(req.body.value), function(val) {
+            console.log('factor set to ' + val);
+            res.json({status:'ok'});
+        });
+    }
+    if(req.body.command == 'extrusionFactor') {
+        printer.setExtrusionFactor(parseFloat(req.body.value), function(val) {
+            console.log('factor set to ' + val);
             res.json({status:'ok'});
         });
     }

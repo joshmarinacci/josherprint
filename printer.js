@@ -144,6 +144,22 @@ function Printer(MessageQueue) {
         });
     }
 
+    this.setExtrusionFactor = function(factor, cb) {
+        console.log('setting extrusion factor to ', factor);
+        this.sendRequest('M221 S'+Math.floor(factor*100), function() {
+            console.log("set the extrusion factor to ", factor);
+            cb(factor);
+        });
+    }
+
+    this.setSpeedFactor = function(factor, cb) {
+        console.log('setting speed factor to ', factor);
+        this.sendRequest('M220 S'+Math.floor(factor*100), function() {
+            console.log("set the extrusion factor to ", factor);
+            cb(factor);
+        });
+    }
+
 }
 
 
