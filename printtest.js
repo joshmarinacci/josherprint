@@ -1,136 +1,42 @@
 var SP = require("serialport");
-var fs = require('fs');
-var serialPort = new SP.SerialPort("/dev/cu.usbmodem12341", {
-  baudrate: 57600
-});
+var Printer = require('./printer').Printer;
 
-var cbqueue = [];
-var queueWaiting = false;
-var mess = "";
-function appendMessage(m) {
-    mess += m;
-    mess += '\n';
-}
-function endMessage(m) {
-    console.log("finished the message",m);
-    mess += m;
-    console.log(mess);
-    var command = cbqueue.shift();
-    console.log("done with command",command.cmd);
-    command.cb(mess);
-    mess = "";
-    queueWaiting = false;
-}
+var MessageQueue = require('./MessageQueue.js').MessageQueue;
+var printer = new Printer(MessageQueue);
+//send home
+printer.open('/dev/cu.usbmodem12341', function() {
+    console.log("calling, go home");
+    printer.setTemp(200,function() {
+        console.log("moving Z up");
+        printer.move('z',10,function() {
+            //send gcode file
+            console.log("sending gcode");
+            printer.writeFile('test.gcode', function() {
+                console.log('really printing now');
 
-function checkQueue() {
-    if(queueWaiting) {
-        console.log("waiting for the queue");
-    } else {
-        if(cbqueue.length > 0) {
-            var command = cbqueue[0];
-            console.log("going to send",command.cmd);
-            queueWaiting = true;
-            serialPort.write(command.cmd+'\n',function(err,results) {
-                console.log("wrote ",results,'bytes');
+                //wait 10sec
+                setTimeout(function() {
+                    console.log("############### sending pause");
+                    //send pause
+                    printer.pause(function() {
+                        setTimeout(function() {
+                            console.log("########## paused");
+                            //adjust extruder
+                            printer.move('z',10,function() {
+                                console.log("####### moved Z up");
+                                //printer.move('z',0,function() {
+                                    console.log("######### resuming to let it reset");
+                                    //send resume
+                                    printer.resume(function() {
+                                        console.log("resumed printing");
+                                    })
+                                //});
+                            })
+
+                        },15*1000);
+                    });
+                },30*1000);
             });
-        }
-    }
-}
-
-function sendRequest(cmd,cb) {
-    cbqueue.push({
-        cmd:cmd,
-        cb:cb,
-    });
-    checkQueue();
-    /*
-    serialPort.write(cmd+'\n',function(err,results) {
-        console.log("wrote ",results,'bytes');
-    })
-    */
-}
-
-function sendCommands(arr) {
-    arr.forEach(function(cmd) {
-        console.log("sending",cmd);
-        sendRequest(cmd,function(){console.log("done",cmd)});
-    });
-}
-
-function writeFile() {
-    var gcode = fs.readFileSync('octogon.gcode');
-    var lines = gcode.toString().split("\n");
-    console.log("gcode line count ",lines.length);
-    sendCommands(lines);
-}
-
-serialPort.on('open',function() {
-    console.log("opened");
-    serialPort.on('data',function(data) {
-        queueWaiting = false;
-        //console.log("got data",data.length);
-        var str = data.toString();
-        var lines = str.split("\n");
-        lines.forEach(function(line) {
-            //console.log("line = -",line,"-");
-            if(line == "" || line == "\n" || line == "  ") {
-                return;
-            }
-            if(line[0] == 'T' && line[1] == ':') {
-                var temp = line.match(/T:(\d+\.\d+)/);
-                console.log("got temp back: ",temp[1]);
-                return;
-            }
-            if(line[0] == 'o' && line[1] == 'k') {
-                endMessage(line);
-            } else {
-                appendMessage(line);
-            }
         });
-
     });
-
-    sendRequest("G28", function(r) {
-        console.log("home finished",r);
-        sendRequest('M109 S196',function(r) {
-            console.log("temp finished",r);
-            writeFile();
-        })
-    });
-
 });
-
-/*
-serialPort.on('open',function() {
-    console.log("opened serial port");
-    serialPort.on('data',function(data) {
-        console.log("got data",data.length,data.toString());
-        var line = data.toString();
-
-        var temp = line.match(/T:(\d+\.\d+)/);
-        if(temp && temp.length > 1) {
-            console.log("temp",temp[1]);
-            if(parseFloat(temp[1]) > 195) {
-                writeFile();
-            }
-        }
-
-    });
-
-
-    serialPort.write('M501\n',function(err,results){
-        console.log('wrote to the serial port');
-        console.log("wrote",results,"bytes");
-        serialPort.write('G28', function() {});
-        //serialPort.write('M109 S196\n',function(err,results) {
-            //console.log("done with temp");
-            // writeFile();
-        //});
-    });
-
-
-//    writeFile();
-
-
-});
-*/

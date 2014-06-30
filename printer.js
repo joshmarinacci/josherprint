@@ -8,6 +8,11 @@ function Printer(MessageQueue) {
     this.temp = -1;
     this.totallines = 0;
     this.linesleft = 0;
+
+    this.open = function(port, cb) {
+        MessageQueue.openSerial(port,cb);
+    }
+
     this.goHome = function(axes,cb) {
         console.log('homing the axes',axes);
         //setState('homing');
@@ -19,7 +24,7 @@ function Printer(MessageQueue) {
 
     this.getTemp = function(cb) {
         console.log("getTemp");
-        MessageQueue.sendRequest('M105',function(m) {
+        this.sendRequest('M105',function(m) {
             console.log("getting temp return ",m);
             var temp = m.match(/T:(\d+\.\d+)/);
             if(temp) {
@@ -33,9 +38,20 @@ function Printer(MessageQueue) {
         });
     }
 
+    this.setTemp = function(temp, cb) {
+        //setState('heating');
+        console.log("moving to the target temp of ", temp);
+        //STATUS.ttemp = parseFloat(temp);
+        this.sendRequest('M109 S'+temp,function() {
+            //setState('standby');
+            cb(temp);
+        });
+    }
+
     this.sendRequest = function(req,cb) {
         if(!this.dummy) {
             MessageQueue.sendRequest(req,cb);
+            MessageQueue.processNextCommand();
         } else {
             cb();
         }
@@ -44,7 +60,7 @@ function Printer(MessageQueue) {
 
     this.getPositions = function(cb) {
         console.log("getPositions");
-        MessageQueue.sendRequest('M114',function(mm) {
+        this.sendRequest('M114',function(mm) {
             console.log("get positiosn returned",mm);
             var pos = mm.toString().replace(/\n/g,'');
             var matches = pos.match(/X:(\d+\.\d+)Y:(\d+\.\d+)Z:(\d+\.\d+)E:(\d+\.\d+)/);
@@ -73,15 +89,6 @@ function Printer(MessageQueue) {
         this.sendRequest(req, function() { cb(value); });
     };
 
-    this.setTemp = function(temp, cb) {
-        //setState('heating');
-        console.log("moving to the target temp of ", temp);
-        //STATUS.ttemp = parseFloat(temp);
-        this.sendRequest('M109 S'+temp,function() {
-            //setState('standby');
-            cb(temp);
-        });
-    }
 
     this.extrude = function(amt, cb) {
         console.log("extruding by ",amt);
@@ -95,7 +102,7 @@ function Printer(MessageQueue) {
         })
     }
 
-    this.writeFile = function(gcodefile) {
+    this.writeFile = function(gcodefile, cb) {
         this.printing = true;
         console.log("loading gcode file",gcodefile);
         var gcode = fs.readFileSync(gcodefile);
@@ -103,17 +110,38 @@ function Printer(MessageQueue) {
         console.log("gcode line count ",lines.length);
         this.totallines = lines.length;
         this.linesleft = lines.length;
-        MessageQueue.sendCommands(lines);
+        MessageQueue.sendPrintFile(lines, function() {
+            if(cb) cb();
+        });
     }
 
     this.pause = function(cb) {
-        if(this.paused) {
-            MessageQueue.resume();
-            this.paused = false;
-        } else {
-            MessageQueue.pause();
-            this.paused = true;
-        }
+        MessageQueue.pause();
+        this.paused = true;
+        if(cb) cb();
+    }
+
+    this.resume = function(cb) {
+        MessageQueue.resume();
+        var self = this;
+        this.sendRequest('G0 '+MessageQueue.lastZ, function() {
+            console.log("reset the Z");
+            self.sendRequest('G92 '+MessageQueue.lastE, function() {
+                console.log('reset the E counter');
+                self.paused = false;
+                MessageQueue.processNextCommand();
+                if(cb) cb();
+            });
+        })
+    }
+
+    this.setFanSpeed = function(speed, cb) {
+        console.log("setting speed to ", speed);
+        var intSpeed = Math.floor(speed*255);
+        this.sendRequest('M106 S'+intSpeed, function() {
+            console.log("sent the speed to " + intSpeed);
+            cb(speed);
+        });
     }
 
 }

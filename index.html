@@ -396,6 +396,13 @@
                         </div>
                     </div>
 
+                    <div class='row'>
+                        <div class='col-xs-12'>
+                            <button class='btn btn-default' id='manual-fan-on'>Fan On</button>
+                            <button class='btn btn-default' id='manual-fan-off'>Fan Off</button>
+                        </div>
+                    </div>
+
 
 
                 </div>
@@ -651,6 +658,20 @@ var server = {
         });
 
     },
+
+    fanOn: function() {
+        console.log("fan on");
+        $.post(BASEURL+'/fan', { speed: '1.0' }, function(result,status) {
+            console.log("requested the fan to go to 100%",result);
+        });
+    },
+
+    fanOff: function() {
+        console.log("fan off");
+        $.post(BASEURL+'/fan', { speed: '0.0' }, function(result,status) {
+            console.log("requested the fan to go to 0%",result);
+        });
+    },
 }
 
 
@@ -678,6 +699,8 @@ $(document).ready(function() {
     $("#manual-downe").click(server.moveDownE);
     $("#manual-home").click(server.moveHome);
     $("#manual-temp").change(function() { server.setTargetTemp(parseFloat($(this).val()));  });
+    $("#manual-fan-on").click(server.fanOn);
+    $("#manual-fan-off").click(server.fanOff);
 
     // ===== file upload stuff
     $(document).on('change', '.btn-file :file', function() {

@@ -1,5 +1,5 @@
 var CURA_PATH = '/Applications/Cura/Cura.app/Contents/MacOS/Cura';
-var DEMO = true;
+var DEMO = false;
 
 var fs = require('fs');
 var express = require('express');
@@ -33,7 +33,7 @@ if(DEMO) {
     printer.dummy = true;
 }
 MessageQueue.broadcast = function(mess) {
-    console.log('printer queue reported',mess);
+    //console.log('printer queue reported',mess);
     if(mess.type == 'temp') {
         printer.temp = parseFloat(mess.value);
         sendUpdate({
@@ -46,7 +46,7 @@ MessageQueue.broadcast = function(mess) {
     }
     if(mess.type == 'okay') {
         if(printer.printing) {
-            console.log("we can decrement number of commands now");
+            //console.log("we can decrement number of commands now");
             printer.linesleft--;
             sendUpdate({
                 progress:{
@@ -143,6 +143,13 @@ app.post('/api/printer/tool',function(req,res) {
     }
 });
 
+
+app.post('/api/fan',function(req,res) {
+    printer.setFanSpeed(parseFloat(req.body.speed), function(val) {
+        res.json({status:'ok'});
+    });
+});
+
 var demoid = -1;
 var demostate = "";
 var democomplete = 0.0;
@@ -192,7 +199,7 @@ function runDemoPrint() {
 
 //start, pause, resume, and cancel
 app.post('/api/job', function(req,res) {
-    console.log('job command is',req.body.command);
+    //console.log('job command is',req.body.command);
     if(req.body.command == 'start') {
         var item = printqueue.shift();
         //var file = process.cwd()+'/octogon.stl';
@@ -219,57 +226,40 @@ app.post('/api/job', function(req,res) {
         });
         res.json({status:'ok'}).end();
         return;
-
-        /*
-        console.log('pretending to start a print');
-        sendUpdate({
-            state:{
-                text:'printing',
-                flags:{
-                    printing:true,
-                    error:false,
-                }
-            }});
-        var per = 0.0;
-        var ctime = 0;
-        var ltime = 10;
-        var id = setInterval(function() {
-            sendUpdate({
-                progress: {
-                    completion: per,
-                    printTime: ctime,
-                    printTimeLeft: ltime,
-                }
-            });
-            ctime += 1;
-            ltime -= 1;
-            per += 0.1;
-            if(per >= 1.0) {
-                clearInterval(id);
-            }
-        },1000);
-        res.json({status:'ok'}).end();
-        return;
-        */
     }
     if(req.body.command == 'pause') {
-        printer.pause(function() {
-            console.log('successfully paused');
-            res.json({status:'ok'}).end();
-            sendUpdate({
-                state:{
-                    text:'printing',
-                    flags:{
-                        printing:true,
-                        error:false,
-                        paused:printer.paused,
-                    }
-                }});
-        });
+        if(!printer.paused) {
+            printer.pause(function() {
+                console.log('successfully paused');
+                res.json({status:'ok'}).end();
+                sendUpdate({
+                    state:{
+                        text:'printing',
+                        flags:{
+                            printing:true,
+                            error:false,
+                            paused:printer.paused,
+                        }
+                    }});
+            });
+        } else {
+            printer.resume(function() {
+                console.log('successfully resumed');
+                res.json({status:'ok'}).end();
+                sendUpdate({
+                    state:{
+                        text:'printing',
+                        flags:{
+                            printing:true,
+                            error:false,
+                            paused:printer.paused,
+                        }
+                    }});
+            });
+        }
         return;
     }
-    res.json({status:'ok'}).end();
-
+    res.json({status:'error', message:'invalid command'}).end();
 });
 
 
